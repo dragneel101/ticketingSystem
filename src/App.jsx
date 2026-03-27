@@ -1,35 +1,74 @@
+import { useState, useCallback } from 'react';
 import { TicketProvider, useTickets } from './context/TicketContext';
+import TicketList from './components/TicketList';
+import TicketDetail, { EmptyState } from './components/TicketDetail';
+import NewTicketForm from './components/NewTicketForm';
 
-function TicketSummary() {
+/* ── inner shell — must be inside TicketProvider ─────────── */
+function AppShell() {
   const { tickets } = useTickets();
+  const [selectedId, setSelectedId] = useState(null);
+  const [showNewTicket, setShowNewTicket] = useState(false);
+  const [selectLatest, setSelectLatest] = useState(false);
 
-  const counts = tickets.reduce((acc, t) => {
-    acc[t.status] = (acc[t.status] || 0) + 1;
-    return acc;
-  }, {});
+  // Resolve "select the newest ticket" intent once the list updates
+  const resolvedSelectedId = (() => {
+    if (selectLatest && tickets.length > 0) {
+      return tickets[tickets.length - 1].id;
+    }
+    return selectedId;
+  })();
+
+  const handleSelectTicket = useCallback((id) => {
+    setSelectLatest(false);
+    setSelectedId((prev) => (prev === id ? null : id));
+  }, []);
+
+  const handleNewTicket = useCallback(() => {
+    setShowNewTicket(true);
+  }, []);
+
+  const handleCloseForm = useCallback(() => {
+    setShowNewTicket(false);
+  }, []);
+
+  // After form submission: auto-select the ticket that was just created
+  const handleTicketCreated = useCallback(() => {
+    setSelectLatest(true);
+    setSelectedId(null);
+  }, []);
 
   return (
-    <div style={{ fontFamily: 'sans-serif', padding: '2rem' }}>
-      <h1>Support Tickets</h1>
-      <p>
-        <strong>{tickets.length}</strong> ticket{tickets.length !== 1 ? 's' : ''} loaded —
-        context is working.
-      </p>
-      <ul>
-        {Object.entries(counts).map(([status, count]) => (
-          <li key={status}>
-            {status}: {count}
-          </li>
-        ))}
-      </ul>
+    <div className="app-shell">
+      <TicketList
+        selectedId={resolvedSelectedId}
+        onSelect={handleSelectTicket}
+        onNewTicket={handleNewTicket}
+      />
+
+      <main className="main-content" role="main" aria-label="Ticket detail">
+        {resolvedSelectedId ? (
+          <TicketDetail ticketId={resolvedSelectedId} />
+        ) : (
+          <EmptyState />
+        )}
+      </main>
+
+      {showNewTicket && (
+        <NewTicketForm
+          onClose={handleCloseForm}
+          onCreated={handleTicketCreated}
+        />
+      )}
     </div>
   );
 }
 
+/* ── root ────────────────────────────────────────────────── */
 export default function App() {
   return (
     <TicketProvider>
-      <TicketSummary />
+      <AppShell />
     </TicketProvider>
   );
 }

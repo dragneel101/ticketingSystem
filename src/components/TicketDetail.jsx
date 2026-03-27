@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTickets } from '../context/TicketContext';
 import { useToast } from '../context/ToastContext';
 
@@ -104,7 +104,7 @@ function MessageGroup({ message }) {
 
 /* ── main component ──────────────────────────────────────── */
 export default function TicketDetail({ ticketId }) {
-  const { tickets, updateTicket, addMessage } = useTickets();
+  const { tickets, loadTicket, updateTicket, addMessage } = useTickets();
   const { addToast } = useToast();
   const ticket = tickets.find((t) => t.id === ticketId);
 
@@ -114,47 +114,56 @@ export default function TicketDetail({ ticketId }) {
   const threadRef = useRef(null);
   const textareaRef = useRef(null);
 
-  // Scroll to bottom whenever messages change or ticket changes
+  // Load this ticket's messages from the API on mount.
+  // The parent passes key={ticketId} so this component remounts per ticket.
+  useEffect(() => {
+    loadTicket(ticketId).catch(() => addToast('Failed to load messages', 'error'));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Scroll to bottom whenever messages change
   useEffect(() => {
     if (threadRef.current) {
       threadRef.current.scrollTop = threadRef.current.scrollHeight;
     }
-  }, [ticket?.messages?.length, ticketId]);
+  }, [ticket?.messages?.length]);
 
-  // State resets automatically on ticket change because the parent passes key={ticketId}
-  // which causes React to unmount/remount this component fresh for each ticket.
-
-  function handleStatusChange(newStatus) {
-    updateTicket(ticketId, { status: newStatus });
-    addToast(`Status changed to ${newStatus}`, 'info');
+  async function handleStatusChange(newStatus) {
+    try {
+      await updateTicket(ticketId, { status: newStatus });
+      addToast(`Status changed to ${newStatus}`, 'info');
+    } catch {
+      addToast('Failed to update status', 'error');
+    }
   }
 
-  function handlePriorityChange(newPriority) {
-    updateTicket(ticketId, { priority: newPriority });
-    addToast(`Priority changed to ${newPriority}`, 'info');
+  async function handlePriorityChange(newPriority) {
+    try {
+      await updateTicket(ticketId, { priority: newPriority });
+      addToast(`Priority changed to ${newPriority}`, 'info');
+    } catch {
+      addToast('Failed to update priority', 'error');
+    }
   }
 
-  function handleSend() {
+  const handleSend = useCallback(async () => {
     const text = replyText.trim();
     if (!text || isSending) return;
 
     setIsSending(true);
-
-    // Optimistic: add immediately
-    addMessage(ticketId, { from: SUPPORT_EMAIL, text });
-    setReplyText('');
-    setJustSent(true);
-    setIsSending(false);
-    addToast('Reply sent', 'success');
-
-    // Reset the "just sent" checkmark after a moment
-    setTimeout(() => setJustSent(false), 2000);
-
-    // Re-focus textarea for quick follow-up replies
-    requestAnimationFrame(() => {
-      textareaRef.current?.focus();
-    });
-  }
+    try {
+      await addMessage(ticketId, { from: SUPPORT_EMAIL, text });
+      setReplyText('');
+      setJustSent(true);
+      addToast('Reply sent', 'success');
+      setTimeout(() => setJustSent(false), 2000);
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    } catch {
+      addToast('Failed to send reply', 'error');
+    } finally {
+      setIsSending(false);
+    }
+  }, [replyText, isSending, ticketId, addMessage, addToast]);
 
   function handleKeyDown(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {

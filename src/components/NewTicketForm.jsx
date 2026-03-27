@@ -143,7 +143,7 @@ function getPrioritySelected(p) {
 
 /* ── main component ──────────────────────────────────────── */
 export default function NewTicketForm({ onClose, onCreated }) {
-  const { addTicket, addMessage } = useTickets();
+  const { addTicket } = useTickets();
   const { addToast } = useToast();
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState(INITIAL_ERRORS);
@@ -186,37 +186,33 @@ export default function NewTicketForm({ onClose, onCreated }) {
     return ok;
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!validate() || isSubmitting) return;
 
     setIsSubmitting(true);
-
-    // Small artificial delay for perceived quality — feels less like a debug form
-    setTimeout(() => {
-      const newTicket = addTicket({
+    try {
+      // The API creates the ticket + initial message in a single transaction
+      const newTicket = await addTicket({
         subject: form.subject.trim(),
         customerEmail: form.customerEmail.trim().toLowerCase(),
         category: form.category,
         priority: form.priority,
+        initialMessage: form.initialMessage.trim() || undefined,
       });
 
-      if (form.initialMessage.trim()) {
-        addMessage(newTicket.id, {
-          from: form.customerEmail.trim().toLowerCase(),
-          text: form.initialMessage.trim(),
-        });
-      }
-
       setSubmitted(true);
-      setIsSubmitting(false);
       addToast(`Ticket ${newTicket.id} created`, 'success');
 
       setTimeout(() => {
-        onCreated?.();
+        onCreated?.(newTicket.id);
         onClose();
       }, 900);
-    }, 350);
+    } catch {
+      addToast('Failed to create ticket', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   // Close on backdrop click

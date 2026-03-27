@@ -1,100 +1,70 @@
-import { createContext, useContext, useState } from 'react';
-
-const initialTickets = [
-  {
-    id: 'TKT-001',
-    subject: 'Unable to reset password',
-    customerEmail: 'alice@example.com',
-    category: 'Account',
-    priority: 'high',
-    status: 'open',
-    createdAt: '2026-03-24T09:15:00Z',
-    messages: [
-      {
-        from: 'alice@example.com',
-        text: "I've been trying to reset my password for the past hour but I'm not receiving the email.",
-        time: '2026-03-24T09:15:00Z',
-      },
-      {
-        from: 'support@company.com',
-        text: 'Hi Alice, sorry to hear that! Can you confirm the email address on your account?',
-        time: '2026-03-24T09:32:00Z',
-      },
-    ],
-  },
-  {
-    id: 'TKT-002',
-    subject: 'Billing charge not matching invoice',
-    customerEmail: 'bob@example.com',
-    category: 'Billing',
-    priority: 'urgent',
-    status: 'pending',
-    createdAt: '2026-03-25T14:02:00Z',
-    messages: [
-      {
-        from: 'bob@example.com',
-        text: 'My last invoice says $49 but my card was charged $59. Please investigate.',
-        time: '2026-03-25T14:02:00Z',
-      },
-    ],
-  },
-  {
-    id: 'TKT-003',
-    subject: 'Feature request: dark mode',
-    customerEmail: 'carol@example.com',
-    category: 'Feature Request',
-    priority: 'low',
-    status: 'resolved',
-    createdAt: '2026-03-20T11:45:00Z',
-    messages: [
-      {
-        from: 'carol@example.com',
-        text: 'Would love to see a dark mode option in the dashboard.',
-        time: '2026-03-20T11:45:00Z',
-      },
-      {
-        from: 'support@company.com',
-        text: "Great suggestion! Dark mode is already on our roadmap for Q2. We'll notify you when it's live.",
-        time: '2026-03-20T13:10:00Z',
-      },
-    ],
-  },
-];
+import { createContext, useContext, useState, useEffect } from 'react';
 
 const TicketContext = createContext(null);
 
 export function TicketProvider({ children }) {
-  const [tickets, setTickets] = useState(initialTickets);
+  const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  function addTicket(ticket) {
-    const created = {
-      id: `TKT-${String(tickets.length + 1).padStart(3, '0')}`,
-      createdAt: new Date().toISOString(),
-      messages: [],
-      ...ticket,
-    };
-    setTickets((prev) => [...prev, created]);
+  // Load all tickets on mount
+  useEffect(() => {
+    fetch('/api/tickets')
+      .then((r) => r.json())
+      .then(setTickets)
+      .catch((err) => console.error('Failed to load tickets', err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Fetch a single ticket (with messages) and merge into state
+  async function loadTicket(id) {
+    const res = await fetch(`/api/tickets/${id}`);
+    if (!res.ok) throw new Error('Failed to load ticket');
+    const ticket = await res.json();
+    setTickets((prev) => prev.map((t) => (t.id === id ? ticket : t)));
+    return ticket;
+  }
+
+  async function addTicket(ticket) {
+    const res = await fetch('/api/tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(ticket),
+    });
+    if (!res.ok) throw new Error('Failed to create ticket');
+    const created = await res.json();
+    setTickets((prev) => [created, ...prev]);
     return created;
   }
 
-  function updateTicket(id, changes) {
-    setTickets((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...changes } : t))
-    );
+  async function updateTicket(id, changes) {
+    const res = await fetch(`/api/tickets/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(changes),
+    });
+    if (!res.ok) throw new Error('Failed to update ticket');
+    const updated = await res.json();
+    setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, ...updated } : t)));
   }
 
-  function addMessage(ticketId, message) {
+  async function addMessage(ticketId, message) {
+    const res = await fetch(`/api/tickets/${ticketId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: message.from, text: message.text }),
+    });
+    if (!res.ok) throw new Error('Failed to send message');
+    const msg = await res.json();
     setTickets((prev) =>
       prev.map((t) =>
-        t.id === ticketId
-          ? { ...t, messages: [...t.messages, { ...message, time: new Date().toISOString() }] }
-          : t
+        t.id === ticketId ? { ...t, messages: [...(t.messages || []), msg] } : t
       )
     );
+    return msg;
   }
 
   return (
-    <TicketContext.Provider value={{ tickets, addTicket, updateTicket, addMessage }}>
+    <TicketContext.Provider value={{ tickets, loading, loadTicket, addTicket, updateTicket, addMessage }}>
       {children}
     </TicketContext.Provider>
   );

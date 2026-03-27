@@ -10,46 +10,30 @@ function AppShell() {
   const { tickets } = useTickets();
   const [selectedId, setSelectedId] = useState(null);
   const [showNewTicket, setShowNewTicket] = useState(false);
-  const [selectLatest, setSelectLatest] = useState(false);
-
-  // Resolve "select the newest ticket" intent once the list updates
-  const resolvedSelectedId = (() => {
-    if (selectLatest && tickets.length > 0) {
-      return tickets[tickets.length - 1].id;
-    }
-    return selectedId;
-  })();
 
   const handleSelectTicket = useCallback((id) => {
-    setSelectLatest(false);
     setSelectedId((prev) => (prev === id ? null : id));
   }, []);
 
-  const handleNewTicket = useCallback(() => {
-    setShowNewTicket(true);
-  }, []);
+  const handleNewTicket = useCallback(() => setShowNewTicket(true), []);
+  const handleCloseForm = useCallback(() => setShowNewTicket(false), []);
 
-  const handleCloseForm = useCallback(() => {
-    setShowNewTicket(false);
-  }, []);
-
-  // After form submission: auto-select the ticket that was just created
-  const handleTicketCreated = useCallback(() => {
-    setSelectLatest(true);
-    setSelectedId(null);
+  // Receive the created ticket's ID and select it directly
+  const handleTicketCreated = useCallback((newId) => {
+    setSelectedId(newId);
   }, []);
 
   return (
     <div className="app-shell">
       <TicketList
-        selectedId={resolvedSelectedId}
+        selectedId={selectedId}
         onSelect={handleSelectTicket}
         onNewTicket={handleNewTicket}
       />
 
       <main className="main-content" role="main" aria-label="Ticket detail">
-        {resolvedSelectedId ? (
-          <TicketDetail ticketId={resolvedSelectedId} />
+        {selectedId ? (
+          <TicketDetail key={selectedId} ticketId={selectedId} />
         ) : (
           <EmptyState />
         )}

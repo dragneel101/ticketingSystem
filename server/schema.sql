@@ -1,6 +1,27 @@
 -- Run this once against your Postgres database to set up the schema.
 -- psql $DATABASE_URL -f schema.sql
 
+-- ── Users (for authentication) ────────────────────────────────
+CREATE TABLE IF NOT EXISTS users (
+  id            SERIAL PRIMARY KEY,
+  email         TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  name          TEXT NOT NULL DEFAULT '',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ── Sessions (managed by connect-pg-simple) ──────────────────
+-- connect-pg-simple will create this table automatically on startup
+-- when the `createTableIfMissing` option is set to true (see server/index.js).
+
+-- ── Seed user (dev only) ──────────────────────────────────────
+-- Email: admin@company.com  |  Password: password123
+-- Generate a new hash with: node -e "require('bcrypt').hash('yourpass',12).then(console.log)"
+-- then UPDATE users SET password_hash = '...' WHERE email = 'admin@company.com';
+INSERT INTO users (email, password_hash, name)
+VALUES ('admin@company.com', '$2b$12$3mlWRa9mVug3nCkbmsNbQ.OjyYG6cQOlmtCMT6DGeKwDu24tNyXf.', 'Admin')
+ON CONFLICT (email) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS tickets (
   id             SERIAL PRIMARY KEY,
   ticket_ref     TEXT NOT NULL UNIQUE,          -- e.g. "TKT-001"

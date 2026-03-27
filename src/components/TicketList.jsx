@@ -70,7 +70,7 @@ function SidebarStats({ tickets }) {
 }
 
 /* ── main component ──────────────────────────────────────── */
-export default function TicketList({ selectedId, onSelect, onNewTicket }) {
+export default function TicketList({ selectedId, onSelect, onNewTicket, currentUser, onLogout }) {
   const { tickets } = useTickets();
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
@@ -243,6 +243,42 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
           ))
         )}
       </div>
+
+      {/* User footer with logout — pinned to the bottom of the sidebar */}
+      {currentUser && (
+        <div className="sidebar-user-footer">
+          <div className="sidebar-user-info">
+            <div className="sidebar-user-avatar" aria-hidden="true">
+              {/* First letter of their name or email as an avatar */}
+              {(currentUser.name || currentUser.email).charAt(0).toUpperCase()}
+            </div>
+            <div className="sidebar-user-details">
+              <div className="sidebar-user-name">
+                {currentUser.name || currentUser.email}
+              </div>
+              {currentUser.name && (
+                <div className="sidebar-user-email">{currentUser.email}</div>
+              )}
+            </div>
+          </div>
+          <button
+            className="btn-logout"
+            onClick={onLogout}
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path
+                d="M5 2H3a1 1 0 00-1 1v8a1 1 0 001 1h2M9.5 9.5L12 7l-2.5-2.5M12 7H5"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+      )}
     </aside>
   );
 }

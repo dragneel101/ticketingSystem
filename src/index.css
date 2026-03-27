@@ -1104,6 +1104,215 @@ body {
 }
 
 /* ============================================================
+   SIDEBAR USER FOOTER
+   ============================================================ */
+
+/* Pinned to the bottom of the sidebar flex column */
+.sidebar-user-footer {
+  margin-top: auto;
+  padding: 14px 16px;
+  border-top: 1px solid var(--sidebar-border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.sidebar-user-info {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Letter avatar */
+.sidebar-user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-full);
+  background: var(--brand);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.sidebar-user-details {
+  min-width: 0;
+}
+
+.sidebar-user-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e4e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-user-email {
+  font-size: 10px;
+  color: var(--sidebar-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-logout {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--sidebar-border);
+  background: transparent;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: background var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease);
+}
+
+.btn-logout:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #e4e8f0;
+  border-color: var(--brand-border);
+}
+
+/* ============================================================
+   LOGIN PAGE
+   ============================================================ */
+
+/* Full-screen centered layout — dark bg using the sidebar palette */
+.login-page {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sidebar-bg);
+  padding: 24px;
+  animation: fadeIn var(--t-base) var(--ease) both;
+}
+
+/* The card itself is light, matching the modal aesthetic */
+.login-card {
+  background: #fff;
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-xl);
+  width: 100%;
+  max-width: 400px;
+  padding: 36px 36px 32px;
+  animation: scaleIn var(--t-base) var(--ease-out) both;
+}
+
+.login-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.login-logo-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--gray-900);
+  letter-spacing: -0.3px;
+  line-height: 1;
+}
+
+.login-logo-sub {
+  font-size: 11px;
+  color: var(--gray-400);
+  letter-spacing: 0.2px;
+  margin-top: 2px;
+}
+
+/* sidebar-logo-mark renders with white background; override to dark for login card */
+.login-logo .sidebar-logo-mark {
+  background: var(--brand);
+}
+
+.login-heading {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--gray-900);
+  letter-spacing: -0.45px;
+  margin-bottom: 6px;
+}
+
+.login-subheading {
+  font-size: 13px;
+  color: var(--gray-400);
+  margin-bottom: 28px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Error banner — uses urgency red, same palette as priority tokens */
+.login-error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 12px;
+  background: var(--p-urgent-bg);
+  color: var(--p-urgent-text);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-weight: 500;
+  animation: fadeUp var(--t-fast) var(--ease-out) both;
+}
+
+/* Primary submit button — matches btn-new-ticket style exactly */
+.btn-login {
+  width: 100%;
+  padding: 10px 16px;
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-md);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: background var(--t-fast) var(--ease),
+              transform var(--t-fast) var(--ease),
+              box-shadow var(--t-fast) var(--ease);
+  box-shadow: 0 2px 8px rgba(91, 94, 244, 0.4);
+}
+
+.btn-login:hover:not(:disabled) {
+  background: var(--brand-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(91, 94, 244, 0.5);
+}
+
+.btn-login:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(91, 94, 244, 0.4);
+}
+
+.btn-login:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Invisible loading state — occupies space so the layout doesn't flash */
+.auth-loading {
+  min-height: 100%;
+  background: var(--sidebar-bg);
+}
+
+/* ============================================================
    ANIMATIONS
    ============================================================ */
 @keyframes fadeIn {

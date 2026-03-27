@@ -1,13 +1,15 @@
 import { useState, useCallback } from 'react';
-import { TicketProvider, useTickets } from './context/TicketContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { TicketProvider } from './context/TicketContext';
 import { ToastProvider } from './context/ToastContext';
 import TicketList from './components/TicketList';
 import TicketDetail, { EmptyState } from './components/TicketDetail';
 import NewTicketForm from './components/NewTicketForm';
+import LoginForm from './components/LoginForm';
 
 /* ── inner shell — must be inside TicketProvider ─────────── */
 function AppShell() {
-  const { tickets } = useTickets();
+  const { user, logout } = useAuth();
   const [selectedId, setSelectedId] = useState(null);
   const [showNewTicket, setShowNewTicket] = useState(false);
 
@@ -29,6 +31,8 @@ function AppShell() {
         selectedId={selectedId}
         onSelect={handleSelectTicket}
         onNewTicket={handleNewTicket}
+        currentUser={user}
+        onLogout={logout}
       />
 
       <main className="main-content" role="main" aria-label="Ticket detail">
@@ -49,13 +53,37 @@ function AppShell() {
   );
 }
 
-/* ── root ────────────────────────────────────────────────── */
-export default function App() {
+/* ── authenticated app — providers only mount when logged in ─ */
+// We avoid mounting TicketProvider until after login so it doesn't
+// attempt to fetch /api/tickets (which would get a 401) while the
+// user is unauthenticated.
+function AuthenticatedApp() {
+  const { user, authLoading } = useAuth();
+
+  // Show nothing while we check the session — avoids a flash of login
+  // form for users who already have a valid session cookie.
+  if (authLoading) {
+    return <div className="auth-loading" aria-label="Loading" />;
+  }
+
+  if (!user) {
+    return <LoginForm />;
+  }
+
   return (
     <ToastProvider>
       <TicketProvider>
         <AppShell />
       </TicketProvider>
     </ToastProvider>
+  );
+}
+
+/* ── root ────────────────────────────────────────────────── */
+export default function App() {
+  return (
+    <AuthProvider>
+      <AuthenticatedApp />
+    </AuthProvider>
   );
 }

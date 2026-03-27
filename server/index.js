@@ -1,13 +1,18 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
+const path = require('path');
 const pool = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
 app.use(express.json());
+
+// ── Static frontend (production) ─────────────────────────────
+// In dev, Vite serves the frontend and proxies /api to this server.
+// In production, Express serves the built frontend directly.
+const distPath = path.join(__dirname, '../dist');
+app.use(express.static(distPath));
 
 // ── Health check ────────────────────────────────────────────
 app.get('/api/healthz', async (req, res) => {
@@ -23,6 +28,12 @@ app.get('/api/healthz', async (req, res) => {
 // ── Routes ───────────────────────────────────────────────────
 const ticketsRouter = require('./routes/tickets');
 app.use('/api/tickets', ticketsRouter);
+
+// ── SPA catch-all — must be last ─────────────────────────────
+// Any non-API request gets index.html so client-side routing works.
+app.get('*', (req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'));
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

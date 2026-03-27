@@ -1,5 +1,14 @@
 [phases.setup]
 nixPkgs = ["nodejs_22"]
 
+[phases.install]
+cmds = ["npm ci", "cd server && npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "node server/index.js"
+
 [variables]
 NODE_VERSION = "22"

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTickets } from '../context/TicketContext';
+import { useToast } from '../context/ToastContext';
 
 const CATEGORIES = ['Account', 'Billing', 'Feature Request', 'Technical', 'General'];
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
@@ -9,6 +10,7 @@ const INITIAL_FORM = {
   customerEmail: '',
   category: 'Account',
   priority: 'medium',
+  initialMessage: '',
 };
 
 const INITIAL_ERRORS = {
@@ -141,7 +143,8 @@ function getPrioritySelected(p) {
 
 /* ── main component ──────────────────────────────────────── */
 export default function NewTicketForm({ onClose, onCreated }) {
-  const { addTicket } = useTickets();
+  const { addTicket, addMessage } = useTickets();
+  const { addToast } = useToast();
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState(INITIAL_ERRORS);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -191,15 +194,23 @@ export default function NewTicketForm({ onClose, onCreated }) {
 
     // Small artificial delay for perceived quality — feels less like a debug form
     setTimeout(() => {
-      addTicket({
+      const newTicket = addTicket({
         subject: form.subject.trim(),
         customerEmail: form.customerEmail.trim().toLowerCase(),
         category: form.category,
         priority: form.priority,
       });
 
+      if (form.initialMessage.trim()) {
+        addMessage(newTicket.id, {
+          from: form.customerEmail.trim().toLowerCase(),
+          text: form.initialMessage.trim(),
+        });
+      }
+
       setSubmitted(true);
       setIsSubmitting(false);
+      addToast(`Ticket ${newTicket.id} created`, 'success');
 
       setTimeout(() => {
         onCreated?.();
@@ -299,6 +310,23 @@ export default function NewTicketForm({ onClose, onCreated }) {
                   {errors.customerEmail}
                 </span>
               )}
+            </div>
+
+            {/* Initial message */}
+            <div className="form-group">
+              <label htmlFor="new-initial-message" className="form-label">
+                Initial Message
+                <span style={{ fontWeight: 400, color: 'var(--gray-400)', marginLeft: 6 }}>(optional)</span>
+              </label>
+              <textarea
+                id="new-initial-message"
+                className="form-input"
+                placeholder="Customer's opening message or issue description…"
+                value={form.initialMessage}
+                onChange={(e) => setField('initialMessage', e.target.value)}
+                rows={3}
+                style={{ resize: 'vertical', minHeight: 72, lineHeight: 1.55 }}
+              />
             </div>
 
             {/* Category + priority row */}

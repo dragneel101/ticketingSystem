@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { TicketProvider, useTickets } from './context/TicketContext';
+import { ToastProvider } from './context/ToastContext';
 import TicketList from './components/TicketList';
 import TicketDetail, { EmptyState } from './components/TicketDetail';
 import NewTicketForm from './components/NewTicketForm';
@@ -67,8 +68,10 @@ function AppShell() {
 /* ── root ────────────────────────────────────────────────── */
 export default function App() {
   return (
-    <TicketProvider>
-      <AppShell />
-    </TicketProvider>
+    <ToastProvider>
+      <TicketProvider>
+        <AppShell />
+      </TicketProvider>
+    </ToastProvider>
   );
 }

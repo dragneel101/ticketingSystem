@@ -67,15 +67,14 @@ export function TicketProvider({ children }) {
   const [tickets, setTickets] = useState(initialTickets);
 
   function addTicket(ticket) {
-    setTickets((prev) => [
-      ...prev,
-      {
-        id: `TKT-${String(prev.length + 1).padStart(3, '0')}`,
-        createdAt: new Date().toISOString(),
-        messages: [],
-        ...ticket,
-      },
-    ]);
+    const created = {
+      id: `TKT-${String(tickets.length + 1).padStart(3, '0')}`,
+      createdAt: new Date().toISOString(),
+      messages: [],
+      ...ticket,
+    };
+    setTickets((prev) => [...prev, created]);
+    return created;
   }
 
   function updateTicket(id, changes) {
@@ -101,6 +100,7 @@ export function TicketProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTickets() {
   const ctx = useContext(TicketContext);
   if (!ctx) throw new Error('useTickets must be used within a TicketProvider');

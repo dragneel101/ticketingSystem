@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTickets } from '../context/TicketContext';
+import { useToast } from '../context/ToastContext';
 
 const SUPPORT_EMAIL = 'support@company.com';
 
@@ -104,6 +105,7 @@ function MessageGroup({ message }) {
 /* ── main component ──────────────────────────────────────── */
 export default function TicketDetail({ ticketId }) {
   const { tickets, updateTicket, addMessage } = useTickets();
+  const { addToast } = useToast();
   const ticket = tickets.find((t) => t.id === ticketId);
 
   const [replyText, setReplyText] = useState('');
@@ -124,10 +126,12 @@ export default function TicketDetail({ ticketId }) {
 
   function handleStatusChange(newStatus) {
     updateTicket(ticketId, { status: newStatus });
+    addToast(`Status changed to ${newStatus}`, 'info');
   }
 
   function handlePriorityChange(newPriority) {
     updateTicket(ticketId, { priority: newPriority });
+    addToast(`Priority changed to ${newPriority}`, 'info');
   }
 
   function handleSend() {
@@ -141,6 +145,7 @@ export default function TicketDetail({ ticketId }) {
     setReplyText('');
     setJustSent(true);
     setIsSending(false);
+    addToast('Reply sent', 'success');
 
     // Reset the "just sent" checkmark after a moment
     setTimeout(() => setJustSent(false), 2000);

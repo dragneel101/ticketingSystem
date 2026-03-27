@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { useTickets } from '../context/TicketContext';
 
 /* ── helpers ─────────────────────────────────────────────── */
@@ -74,14 +74,44 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
   const { tickets } = useTickets();
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
+  const [search, setSearch] = useState('');
+  const listRef = useRef(null);
 
   const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return tickets.filter((t) => {
       const statusOk = filterStatus === 'all' || t.status === filterStatus;
       const priorityOk = filterPriority === 'all' || t.priority === filterPriority;
-      return statusOk && priorityOk;
+      const searchOk = !q ||
+        t.subject.toLowerCase().includes(q) ||
+        t.customerEmail.toLowerCase().includes(q);
+      return statusOk && priorityOk && searchOk;
     });
-  }, [tickets, filterStatus, filterPriority]);
+  }, [tickets, filterStatus, filterPriority, search]);
+
+  // Keyboard navigation: ArrowUp/Down moves through the filtered list
+  const handleListKeyDown = useCallback((e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+
+    if (filtered.length === 0) return;
+
+    const currentIndex = filtered.findIndex((t) => t.id === selectedId);
+    let nextIndex;
+
+    if (e.key === 'ArrowDown') {
+      nextIndex = currentIndex < filtered.length - 1 ? currentIndex + 1 : 0;
+    } else {
+      nextIndex = currentIndex > 0 ? currentIndex - 1 : filtered.length - 1;
+    }
+
+    const nextId = filtered[nextIndex].id;
+    onSelect(nextId);
+
+    // Move DOM focus to the newly selected card
+    const card = listRef.current?.querySelector(`#ticket-${nextId}`);
+    card?.focus();
+  }, [filtered, selectedId, onSelect]);
 
   return (
     <aside className="sidebar" aria-label="Ticket list">
@@ -115,8 +145,42 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="sidebar-filters" role="search" aria-label="Filter tickets">
+      {/* Search + Filters */}
+      <div className="sidebar-filters" role="search" aria-label="Search and filter tickets">
+        {/* Search */}
+        <div className="search-row">
+          <label htmlFor="ticket-search" className="visually-hidden">Search tickets</label>
+          <div className="search-input-wrap">
+            <svg className="search-icon" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.4" />
+              <path d="M8 8l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            <input
+              id="ticket-search"
+              type="search"
+              className="search-input"
+              placeholder="Search subject or email…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            {search && (
+              <button
+                className="search-clear"
+                onClick={() => setSearch('')}
+                aria-label="Clear search"
+                tabIndex={-1}
+              >
+                <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden="true">
+                  <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Status + Priority */}
         <div className="filter-row">
           <label htmlFor="filter-status" className="visually-hidden">Filter by status</label>
           <select
@@ -153,10 +217,12 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
 
       {/* List */}
       <div
+        ref={listRef}
         className="ticket-list"
         role="listbox"
         aria-label="Tickets"
         aria-activedescendant={selectedId ? `ticket-${selectedId}` : undefined}
+        onKeyDown={handleListKeyDown}
       >
         {filtered.length === 0 ? (
           <div className="ticket-list-empty" role="status">

@@ -80,10 +80,22 @@ export default function DashboardPage({ onViewTicket, onNavigate }) {
   const metrics = useMemo(() => {
     const byStatus = { open: 0, pending: 0, resolved: 0, closed: 0 };
     const byPriority = { low: 0, medium: 0, high: 0, urgent: 0 };
+    let unassigned = 0;
+    let assignedToMe = 0;
 
     for (const t of tickets) {
       if (byStatus[t.status] !== undefined) byStatus[t.status]++;
       if (byPriority[t.priority] !== undefined) byPriority[t.priority]++;
+
+      // assignedTo is null when no agent is assigned
+      if (t.assignedTo === null || t.assignedTo === undefined) {
+        unassigned++;
+      }
+      // Compare numeric IDs — assignedTo comes from the DB as a number,
+      // user.id is also a number from the session response
+      if (user && t.assignedTo === user.id) {
+        assignedToMe++;
+      }
     }
 
     // Recent activity: last 7 tickets by creation date, newest first.
@@ -97,8 +109,8 @@ export default function DashboardPage({ onViewTicket, onNavigate }) {
     // highest bar always fills 100% of its track (like a mini chart axis).
     const maxPriority = Math.max(...Object.values(byPriority), 1); // floor at 1 avoids /0
 
-    return { byStatus, byPriority, recent, maxPriority };
-  }, [tickets]);
+    return { byStatus, byPriority, recent, maxPriority, unassigned, assignedToMe };
+  }, [tickets, user]);
 
   // ── loading / empty states ───────────────────────────────────────────────
   if (loading) {
@@ -138,6 +150,22 @@ export default function DashboardPage({ onViewTicket, onNavigate }) {
           <StatCard label="Pending" value={metrics.byStatus.pending} accent="var(--s-pending-dot)" />
           <StatCard label="Resolved" value={metrics.byStatus.resolved} accent="var(--s-resolved-dot)" />
           <StatCard label="Closed" value={metrics.byStatus.closed} accent="var(--s-closed-dot)" />
+          {/* Unassigned is a key operational metric: non-zero means work is slipping through
+              without an owner. Shown to all authenticated users — any agent should care. */}
+          <StatCard
+            label="Unassigned"
+            value={metrics.unassigned}
+            accent={metrics.unassigned > 0 ? 'var(--p-high-dot)' : 'var(--gray-400)'}
+          />
+          {/* "Assigned to me" only makes sense for agents/admins who are support staff.
+              user.role check also handles the case where user is null during hydration. */}
+          {(user?.role === 'agent' || user?.role === 'admin') && (
+            <StatCard
+              label="Mine"
+              value={metrics.assignedToMe}
+              accent="var(--brand)"
+            />
+          )}
         </div>
 
         {/* ── lower grid: priority chart + recent tickets ──────────────── */}

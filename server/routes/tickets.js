@@ -14,7 +14,9 @@ async function nextTicketRef(client) {
   return `TKT-${String(num + 1).padStart(3, '0')}`;
 }
 
-// Shape a DB row into the format the frontend expects
+// Shape a DB row into the format the frontend expects.
+// The row may include assignee columns from a LEFT JOIN on users —
+// we always emit the assignment fields so the frontend can rely on them.
 function formatTicket(row, messages = []) {
   return {
     id: row.ticket_ref,
@@ -24,6 +26,10 @@ function formatTicket(row, messages = []) {
     priority: row.priority,
     status: row.status,
     createdAt: row.created_at,
+    // Assignment: null when unassigned, populated by JOIN when assigned
+    assignedTo: row.assigned_to ?? null,
+    assigneeName: row.assignee_name ?? null,
+    assigneeEmail: row.assignee_email ?? null,
     messages: messages.map((m) => ({
       from: m.from_addr,
       text: m.body,
@@ -41,16 +47,25 @@ router.get('/', async (req, res) => {
 
     if (req.query.status) {
       values.push(req.query.status);
-      conditions.push(`status = $${values.length}`);
+      conditions.push(`t.status = $${values.length}`);
     }
     if (req.query.priority) {
       values.push(req.query.priority);
-      conditions.push(`priority = $${values.length}`);
+      conditions.push(`t.priority = $${values.length}`);
     }
 
+    // Prefix WHERE conditions with "t." now that we're joining tables.
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const { rows } = await pool.query(
-      `SELECT * FROM tickets ${where} ORDER BY created_at DESC`,
+      // LEFT JOIN so tickets without an assignee are still returned.
+      // u.name and u.email are aliased to avoid colliding with ticket columns.
+      `SELECT t.*,
+              u.name  AS assignee_name,
+              u.email AS assignee_email
+       FROM tickets t
+       LEFT JOIN users u ON u.id = t.assigned_to
+       ${where}
+       ORDER BY t.created_at DESC`,
       values
     );
 
@@ -66,7 +81,13 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { rows: ticketRows } = await pool.query(
-      'SELECT * FROM tickets WHERE ticket_ref = $1',
+      // Same LEFT JOIN as the list endpoint — consistent shape for formatTicket
+      `SELECT t.*,
+              u.name  AS assignee_name,
+              u.email AS assignee_email
+       FROM tickets t
+       LEFT JOIN users u ON u.id = t.assigned_to
+       WHERE t.ticket_ref = $1`,
       [req.params.id]
     );
     if (ticketRows.length === 0) {
@@ -136,7 +157,8 @@ router.post('/', async (req, res) => {
 });
 
 // ── PATCH /api/tickets/:id ────────────────────────────────────
-// Accepts: { status, priority } — updates only the fields provided
+// Accepts: { status, priority, assigned_to } — updates only the fields provided.
+// assigned_to must be an integer user ID (agent or admin role), or null to unassign.
 router.patch('/:id', async (req, res) => {
   const allowed = ['status', 'priority'];
   const updates = {};
@@ -145,15 +167,55 @@ router.patch('/:id', async (req, res) => {
     if (req.body[key] !== undefined) updates[key] = req.body[key];
   }
 
+  // Handle assigned_to separately: it can be null (unassign) or an integer (assign).
+  // We can't include it in the simple `allowed` loop because null is a valid value
+  // and needs distinct handling — an undefined check would incorrectly allow null
+  // through for the other fields.
+  if (req.body.assigned_to !== undefined) {
+    const rawId = req.body.assigned_to;
+
+    if (rawId === null) {
+      // Explicit unassign — always valid, no DB lookup needed
+      updates.assigned_to = null;
+    } else {
+      const userId = parseInt(rawId, 10);
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: 'assigned_to must be an integer user ID or null' });
+      }
+
+      // Server-side role validation: only agents and admins can be assigned tickets.
+      // The frontend only shows these roles in the dropdown, but any authenticated
+      // user can send a raw PATCH — this check is the real gate.
+      try {
+        const { rows: userRows } = await pool.query(
+          `SELECT id, role FROM users WHERE id = $1`,
+          [userId]
+        );
+        if (userRows.length === 0) {
+          return res.status(400).json({ error: 'Assignee user not found' });
+        }
+        if (!['agent', 'admin'].includes(userRows[0].role)) {
+          return res.status(400).json({ error: 'Assignee must be an agent or admin' });
+        }
+        updates.assigned_to = userId;
+      } catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Failed to validate assignee' });
+      }
+    }
+  }
+
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({ error: 'No valid fields to update' });
   }
 
-  // Build SET clause dynamically: "status = $1, priority = $2"
+  // Build SET clause dynamically: "status = $1, assigned_to = $2"
   const setClauses = Object.keys(updates).map((k, i) => `${k} = $${i + 1}`);
   const values = [...Object.values(updates), req.params.id];
 
   try {
+    // After updating, re-JOIN users so the response includes fresh assignee data —
+    // same shape as GET endpoints so the frontend state merge works cleanly.
     const { rows } = await pool.query(
       `UPDATE tickets SET ${setClauses.join(', ')}
        WHERE ticket_ref = $${values.length}
@@ -163,7 +225,18 @@ router.patch('/:id', async (req, res) => {
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    res.json(formatTicket(rows[0]));
+
+    // Fetch with JOIN to get assignee name/email in the response
+    const { rows: joined } = await pool.query(
+      `SELECT t.*,
+              u.name  AS assignee_name,
+              u.email AS assignee_email
+       FROM tickets t
+       LEFT JOIN users u ON u.id = t.assigned_to
+       WHERE t.id = $1`,
+      [rows[0].id]
+    );
+    res.json(formatTicket(joined[0]));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to update ticket' });

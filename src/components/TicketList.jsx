@@ -1,7 +1,15 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useTickets } from '../context/TicketContext';
+import { useAuth } from '../context/AuthContext';
 
 /* ── helpers ─────────────────────────────────────────────── */
+function initials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
 function formatDate(iso) {
   const date = new Date(iso);
   const now = new Date();
@@ -72,10 +80,22 @@ function SidebarStats({ tickets }) {
 /* ── main component ──────────────────────────────────────── */
 export default function TicketList({ selectedId, onSelect, onNewTicket, currentUser, onLogout }) {
   const { tickets } = useTickets();
+  const { user } = useAuth();
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
+  const [filterAssignee, setFilterAssignee] = useState('all');
+  const [agents, setAgents] = useState([]);
   const [search, setSearch] = useState('');
   const listRef = useRef(null);
+
+  // Fetch agents once for the assignee filter dropdown.
+  // Same pattern as TicketDetail — local fetch, non-fatal on failure.
+  useEffect(() => {
+    fetch('/api/auth/agents')
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then(setAgents)
+      .catch(() => {}); // silently degrade — filter just won't list agents
+  }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -85,9 +105,22 @@ export default function TicketList({ selectedId, onSelect, onNewTicket, currentU
       const searchOk = !q ||
         t.subject.toLowerCase().includes(q) ||
         t.customerEmail.toLowerCase().includes(q);
-      return statusOk && priorityOk && searchOk;
+
+      // Assignee filter: 'all' = no filter, 'unassigned' = null assignedTo,
+      // 'me' = current user's ID, any other value = a specific agent's numeric ID.
+      let assigneeOk = true;
+      if (filterAssignee === 'unassigned') {
+        assigneeOk = t.assignedTo === null || t.assignedTo === undefined;
+      } else if (filterAssignee === 'me') {
+        assigneeOk = t.assignedTo === user?.id;
+      } else if (filterAssignee !== 'all') {
+        // parseInt because the select value is a string but assignedTo is a number
+        assigneeOk = t.assignedTo === parseInt(filterAssignee, 10);
+      }
+
+      return statusOk && priorityOk && searchOk && assigneeOk;
     });
-  }, [tickets, filterStatus, filterPriority, search]);
+  }, [tickets, filterStatus, filterPriority, filterAssignee, search, user?.id]);
 
   // Keyboard navigation: ArrowUp/Down moves through the filtered list
   const handleListKeyDown = useCallback((e) => {
@@ -210,6 +243,26 @@ export default function TicketList({ selectedId, onSelect, onNewTicket, currentU
             <option value="low">Low</option>
           </select>
         </div>
+
+        {/* Assignee filter */}
+        <div className="filter-row">
+          <label htmlFor="filter-assignee" className="visually-hidden">Filter by assignee</label>
+          <select
+            id="filter-assignee"
+            className="filter-select filter-select--full"
+            value={filterAssignee}
+            onChange={(e) => setFilterAssignee(e.target.value)}
+          >
+            <option value="all">All Assignees</option>
+            <option value="unassigned">Unassigned</option>
+            <option value="me">Assigned to me</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Stats */}
@@ -315,6 +368,20 @@ function TicketCard({ ticket, isActive, onClick }) {
           {ticket.customerEmail}
         </span>
         <span className="ticket-card-date">{formatDate(ticket.createdAt)}</span>
+      </div>
+
+      {/* Assignee row — always shown so the presence/absence is immediately scannable */}
+      <div className="ticket-card-assignee">
+        {ticket.assignedTo ? (
+          <>
+            <span className="assignee-avatar-xs" aria-hidden="true">
+              {initials(ticket.assigneeName)}
+            </span>
+            <span className="ticket-card-assignee-name">{ticket.assigneeName}</span>
+          </>
+        ) : (
+          <span className="ticket-card-unassigned">Unassigned</span>
+        )}
       </div>
     </div>
   );

@@ -6,6 +6,15 @@ import { useAuth } from '../context/AuthContext';
 const SUPPORT_EMAIL = 'support@company.com';
 
 /* ── helpers ─────────────────────────────────────────────── */
+// Generate two-letter initials from a full name ("Jane Smith" → "JS").
+// Falls back to one letter if there's only one word, and to "?" if name is empty.
+function initials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
 function formatMessageTime(iso) {
   return new Date(iso).toLocaleString([], {
     month: 'short',
@@ -51,7 +60,7 @@ export function EmptyState() {
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'];
 const STATUS_OPTIONS   = ['open', 'pending', 'resolved', 'closed'];
 
-function ControlSelect({ id, label, value, options, onChange }) {
+function ControlSelect({ id, label, value, options, onChange, disabled }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <label
@@ -72,10 +81,53 @@ function ControlSelect({ id, label, value, options, onChange }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-label={label}
+        disabled={disabled}
       >
         {options.map((o) => (
           <option key={o} value={o}>
             {o.charAt(0).toUpperCase() + o.slice(1)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/* ── assignee picker ─────────────────────────────────────── */
+// Receives the full agent list and the current assignedTo user ID (or null).
+// Renders a <select> that matches the style of ControlSelect but with an
+// "Unassigned" sentinel option keyed to the empty string.
+function AssigneeSelect({ id, agents, assignedTo, onChange, disabled }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <label
+        htmlFor={id}
+        style={{
+          fontSize: '10px',
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          color: 'var(--gray-400)',
+        }}
+      >
+        Assigned to
+      </label>
+      <select
+        id={id}
+        className="detail-select detail-select--assignee"
+        // Coerce null → '' for the <select> value (DOM selects don't handle null)
+        value={assignedTo ?? ''}
+        onChange={(e) => {
+          // Convert '' back to null for the "Unassigned" option
+          onChange(e.target.value === '' ? null : parseInt(e.target.value, 10));
+        }}
+        aria-label="Assigned to"
+        disabled={disabled}
+      >
+        <option value="">Unassigned</option>
+        {agents.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.name} ({a.role})
           </option>
         ))}
       </select>
@@ -113,6 +165,8 @@ export default function TicketDetail({ ticketId }) {
   const [replyText, setReplyText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [justSent, setJustSent] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [agents, setAgents] = useState([]);
   const threadRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -120,6 +174,25 @@ export default function TicketDetail({ ticketId }) {
   // The parent passes key={ticketId} so this component remounts per ticket.
   useEffect(() => {
     loadTicket(ticketId).catch(() => addToast('Failed to load messages', 'error'));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fetch the agent/admin list once on mount.
+  // Why here rather than lifting to TicketContext? The user list is only needed
+  // when a ticket is open. TicketContext's job is ticket data. If we later need
+  // the agent list in multiple places simultaneously (e.g., a bulk-assign view),
+  // we'd extract it to a shared hook — but for now, one fetch is the right trade.
+  useEffect(() => {
+    fetch('/api/auth/agents')
+      .then((r) => {
+        if (!r.ok) throw new Error('Failed to fetch agents');
+        return r.json();
+      })
+      .then(setAgents)
+      .catch(() => {
+        // Non-fatal: the dropdown just stays empty. Don't toast — it's ambient.
+        console.error('Could not load agent list for assignment picker');
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -145,6 +218,24 @@ export default function TicketDetail({ ticketId }) {
       addToast(`Priority changed to ${newPriority}`, 'info');
     } catch {
       addToast('Failed to update priority', 'error');
+    }
+  }
+
+  async function handleAssigneeChange(userId) {
+    setIsAssigning(true);
+    try {
+      await updateTicket(ticketId, { assigned_to: userId });
+      if (userId === null) {
+        addToast('Ticket unassigned', 'info');
+      } else {
+        // Find the name from our local agents list for the success message
+        const agent = agents.find((a) => a.id === userId);
+        addToast(`Assigned to ${agent?.name ?? 'agent'}`, 'success');
+      }
+    } catch {
+      addToast('Failed to update assignment', 'error');
+    } finally {
+      setIsAssigning(false);
     }
   }
 
@@ -215,6 +306,13 @@ export default function TicketDetail({ ticketId }) {
               options={PRIORITY_OPTIONS}
               onChange={handlePriorityChange}
             />
+            <AssigneeSelect
+              id={`assignee-${ticketId}`}
+              agents={agents}
+              assignedTo={ticket.assignedTo}
+              onChange={handleAssigneeChange}
+              disabled={isAssigning}
+            />
             {user?.role === 'admin' && (
               <button className="btn-delete-ticket" onClick={handleDelete} aria-label="Delete ticket">
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -281,6 +379,22 @@ export default function TicketDetail({ ticketId }) {
             <span>
               {ticket.messages.length} message{ticket.messages.length !== 1 ? 's' : ''}
             </span>
+          </div>
+
+          {/* Assignee indicator in meta row */}
+          <div className="detail-meta-separator" aria-hidden="true" />
+          <div className="detail-meta-item">
+            {ticket.assignedTo ? (
+              <>
+                {/* Initials avatar — same brand color as sidebar avatar */}
+                <span className="assignee-avatar-sm" aria-hidden="true">
+                  {initials(ticket.assigneeName)}
+                </span>
+                <span>{ticket.assigneeName}</span>
+              </>
+            ) : (
+              <span className="assignee-unassigned-meta">Unassigned</span>
+            )}
           </div>
 
           {/* Status badge inline */}

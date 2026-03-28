@@ -84,3 +84,16 @@ CREATE TABLE IF NOT EXISTS settings (
 INSERT INTO settings (key, value)
 VALUES ('min_password_length', '10')
 ON CONFLICT (key) DO NOTHING;
+
+-- ── Migration: ticket assignment ──────────────────────────────
+-- Run once against an existing database. schema.sql is idempotent:
+-- IF NOT EXISTS means re-running the full file is safe.
+--
+-- ON DELETE SET NULL: when an agent/admin user is deleted their tickets
+-- become unassigned rather than being deleted (CASCADE) or blocking the
+-- user deletion (RESTRICT). Unassigned tickets are a recoverable state;
+-- deleted tickets are not.
+ALTER TABLE tickets
+  ADD COLUMN IF NOT EXISTS assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_tickets_assigned_to ON tickets(assigned_to);

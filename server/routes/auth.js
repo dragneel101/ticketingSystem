@@ -101,7 +101,27 @@ router.get('/me', async (req, res) => {
   }
 });
 
+const requireAuth = require('../middleware/requireAuth');
 const adminOnly = require('../middleware/adminOnly');
+
+// GET /api/auth/agents — any authenticated user, returns agents + admins only.
+// Used by the ticket assignment dropdown: agents need this list to assign tickets
+// but should not have full admin access to all user management data.
+// We expose less than GET /api/auth/users: no created_at, only id/name/email/role.
+router.get('/agents', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, email, role
+       FROM users
+       WHERE role IN ('agent', 'admin')
+       ORDER BY name ASC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch agents' });
+  }
+});
 
 // GET /api/auth/users — admin only, lists all users (never exposes password_hash)
 // Ordered newest-first so freshly created users surface at the top of the table.

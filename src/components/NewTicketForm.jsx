@@ -8,6 +8,8 @@ const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 const INITIAL_FORM = {
   subject: '',
   customerEmail: '',
+  phone: '',
+  company: '',
   category: 'Account',
   priority: 'medium',
   initialMessage: '',
@@ -196,6 +198,8 @@ export default function NewTicketForm({ onClose, onCreated }) {
       const newTicket = await addTicket({
         subject: form.subject.trim(),
         customerEmail: form.customerEmail.trim().toLowerCase(),
+        phone: form.phone.trim() || undefined,
+        company: form.company.trim() || undefined,
         category: form.category,
         priority: form.priority,
         initialMessage: form.initialMessage.trim() || undefined,
@@ -306,6 +310,40 @@ export default function NewTicketForm({ onClose, onCreated }) {
                   {errors.customerEmail}
                 </span>
               )}
+            </div>
+
+            {/* Phone + company row */}
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="new-phone" className="form-label">
+                  Phone
+                  <span style={{ fontWeight: 400, color: 'var(--gray-400)', marginLeft: 6 }}>(optional)</span>
+                </label>
+                <input
+                  id="new-phone"
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. +1 555 000 1234"
+                  value={form.phone}
+                  onChange={(e) => setField('phone', e.target.value)}
+                  autoComplete="tel"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="new-company" className="form-label">
+                  Company
+                  <span style={{ fontWeight: 400, color: 'var(--gray-400)', marginLeft: 6 }}>(optional)</span>
+                </label>
+                <input
+                  id="new-company"
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. Acme Corp"
+                  value={form.company}
+                  onChange={(e) => setField('company', e.target.value)}
+                  autoComplete="organization"
+                />
+              </div>
             </div>
 
             {/* Initial message */}

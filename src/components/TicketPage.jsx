@@ -32,6 +32,26 @@ function formatDate(iso) {
   });
 }
 
+// Pure utility — no side effects, easy to unit-test in isolation.
+// Returns a human-readable relative time string for audit trail timestamps.
+function formatRelativeTime(iso) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+
+  if (diffSec < 60)  return 'just now';
+  if (diffMin < 60)  return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+  if (diffHour < 24) return `${diffHour} hour${diffHour === 1 ? '' : 's'} ago`;
+
+  // Older than 24h — show an absolute date that stays readable across days/years
+  return new Date(iso).toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 // ── sub-components ─────────────────────────────────────────────
 
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'];
@@ -351,8 +371,13 @@ function InternalNotesTab({ ticket, ticketId }) {
 }
 
 // ── Resolution tab ─────────────────────────────────────────────
-function ResolutionTab({ ticket, ticketId }) {
+// onUpdate is passed from TicketPage so that saves trigger the post-patch
+// loadTicket refresh (needed to show 'resolution_set' event in History tab).
+function ResolutionTab({ ticket, ticketId, onUpdate }) {
   const { updateTicket } = useTickets();
+  // Use the injected onUpdate if provided, fall back to raw updateTicket.
+  // This keeps ResolutionTab usable in isolation (e.g., tests).
+  const doUpdate = onUpdate ?? updateTicket;
   const { addToast } = useToast();
   // Local state so we can edit without immediately patching the server.
   const [resolutionText, setResolutionText] = useState(ticket.resolution ?? '');
@@ -366,7 +391,7 @@ function ResolutionTab({ ticket, ticketId }) {
   async function handleSaveResolution() {
     setIsSaving(true);
     try {
-      await updateTicket(ticketId, { resolution: resolutionText.trim() || null });
+      await doUpdate(ticketId, { resolution: resolutionText.trim() || null });
       addToast('Resolution saved', 'success');
     } catch {
       addToast('Failed to save resolution', 'error');
@@ -380,7 +405,7 @@ function ResolutionTab({ ticket, ticketId }) {
     try {
       // Save both resolution text and status in a single PATCH.
       // The server's `allowed` list now includes `resolution`, so this works.
-      await updateTicket(ticketId, {
+      await doUpdate(ticketId, {
         status: 'resolved',
         resolution: resolutionText.trim() || null,
       });
@@ -436,11 +461,143 @@ function ResolutionTab({ ticket, ticketId }) {
   );
 }
 
+// ── History tab ───────────────────────────────────────────────
+// Renders the audit trail as a vertical timeline. Each event type gets
+// a distinct color so agents can scan the history at a glance.
+
+// Maps event_type → { dot class, label builder }
+// The label builder receives the full event object and returns a React node
+// with key parts bolded — keeps the human sentence approach called for in the spec.
+const EVENT_CONFIG = {
+  status_changed: {
+    dotClass: 'hist-dot--status',
+    label: (e) => (
+      <>
+        <span className="hist-actor">{e.actorName ?? 'Someone'}</span>
+        {' changed status from '}
+        <strong>{e.fromValue}</strong>
+        {' to '}
+        <strong>{e.toValue}</strong>
+      </>
+    ),
+  },
+  priority_changed: {
+    dotClass: 'hist-dot--priority',
+    label: (e) => (
+      <>
+        <span className="hist-actor">{e.actorName ?? 'Someone'}</span>
+        {' changed priority from '}
+        <strong>{e.fromValue}</strong>
+        {' to '}
+        <strong>{e.toValue}</strong>
+      </>
+    ),
+  },
+  assigned: {
+    dotClass: 'hist-dot--assigned',
+    label: (e) => (
+      <>
+        <span className="hist-actor">{e.actorName ?? 'Someone'}</span>
+        {' assigned this ticket to '}
+        <strong>{e.toValue}</strong>
+      </>
+    ),
+  },
+  unassigned: {
+    dotClass: 'hist-dot--unassigned',
+    label: (e) => (
+      <>
+        <span className="hist-actor">{e.actorName ?? 'Someone'}</span>
+        {' unassigned '}
+        <strong>{e.fromValue ?? 'the previous assignee'}</strong>
+      </>
+    ),
+  },
+  resolution_set: {
+    dotClass: 'hist-dot--resolution',
+    label: (e) => (
+      <>
+        <span className="hist-actor">{e.actorName ?? 'Someone'}</span>
+        {' set the resolution'}
+      </>
+    ),
+  },
+};
+
+// Fallback for unknown event types — future-proofs against new event_type values
+// being added to the backend before the frontend catches up.
+function defaultLabel(e) {
+  return (
+    <>
+      <span className="hist-actor">{e.actorName ?? 'Someone'}</span>
+      {` performed ${e.eventType.replace(/_/g, ' ')}`}
+    </>
+  );
+}
+
+function HistoryTab({ ticket }) {
+  const events = ticket.events ?? [];
+
+  if (events.length === 0) {
+    return (
+      <div className="tp-tab-content">
+        <div className="hist-empty">
+          <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true">
+            <circle cx="18" cy="18" r="13" stroke="#cdd3de" strokeWidth="1.5" />
+            <path d="M18 11v7l4 4" stroke="#cdd3de" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>No history yet</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="tp-tab-content tp-history-content">
+      <ol className="hist-timeline" aria-label="Ticket history">
+        {events.map((event) => {
+          const config = EVENT_CONFIG[event.eventType];
+          const dotClass = config?.dotClass ?? 'hist-dot--unassigned';
+          const labelNode = config ? config.label(event) : defaultLabel(event);
+
+          return (
+            <li key={event.id} className="hist-row">
+              {/* The connecting line lives as a pseudo-element on .hist-row;
+                  the dot sits on top of it, so we put it in the DOM here */}
+              <span className={`hist-dot ${dotClass}`} aria-hidden="true" />
+              <div className="hist-content">
+                <p className="hist-label">{labelNode}</p>
+                <time
+                  className="hist-time"
+                  dateTime={event.createdAt}
+                  title={new Date(event.createdAt).toLocaleString()}
+                >
+                  {formatRelativeTime(event.createdAt)}
+                </time>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
 // ── Main TicketPage component ──────────────────────────────────
 // This replaces the old TicketDetail — it takes over the full main content
 // area. onBack() resets the view to the ticket list.
 export default function TicketPage({ ticketId, onBack }) {
   const { tickets, loadTicket, updateTicket, deleteTicket } = useTickets();
+
+  // Thin wrapper: patch the ticket then immediately re-fetch so the History tab
+  // shows the newly-inserted event without requiring a manual page reload.
+  // This is a deliberate trade-off: one extra GET per user action, but events are
+  // always fresh. An alternative is to have the PATCH response include events —
+  // that would save the round-trip but couples the response shape more tightly.
+  async function updateAndRefresh(id, changes) {
+    await updateTicket(id, changes);
+    await loadTicket(id);
+  }
   const { addToast } = useToast();
   const { user } = useAuth();
 
@@ -471,7 +628,7 @@ export default function TicketPage({ ticketId, onBack }) {
 
   async function handleStatusChange(newStatus) {
     try {
-      await updateTicket(ticketId, { status: newStatus });
+      await updateAndRefresh(ticketId, { status: newStatus });
       addToast(`Status changed to ${newStatus}`, 'info');
     } catch {
       addToast('Failed to update status', 'error');
@@ -480,7 +637,7 @@ export default function TicketPage({ ticketId, onBack }) {
 
   async function handlePriorityChange(newPriority) {
     try {
-      await updateTicket(ticketId, { priority: newPriority });
+      await updateAndRefresh(ticketId, { priority: newPriority });
       addToast(`Priority changed to ${newPriority}`, 'info');
     } catch {
       addToast('Failed to update priority', 'error');
@@ -490,7 +647,7 @@ export default function TicketPage({ ticketId, onBack }) {
   async function handleAssigneeChange(userId) {
     setIsAssigning(true);
     try {
-      await updateTicket(ticketId, { assigned_to: userId });
+      await updateAndRefresh(ticketId, { assigned_to: userId });
       const agent = agents.find((a) => a.id === userId);
       addToast(userId === null ? 'Ticket unassigned' : `Assigned to ${agent?.name ?? 'agent'}`, userId === null ? 'info' : 'success');
     } catch {
@@ -517,6 +674,7 @@ export default function TicketPage({ ticketId, onBack }) {
     { id: 'communication', label: 'Communication' },
     { id: 'notes', label: 'Internal Notes' },
     { id: 'resolution', label: 'Resolution' },
+    { id: 'history', label: 'History' },
   ];
 
   return (
@@ -671,6 +829,12 @@ export default function TicketPage({ ticketId, onBack }) {
                     {(ticket.messages || []).filter((m) => m.type === 'note').length}
                   </span>
                 )}
+                {/* Show event count on the History tab so agents notice activity */}
+                {tab.id === 'history' && (ticket.events ?? []).length > 0 && (
+                  <span className="tp-tab-badge">
+                    {(ticket.events ?? []).length}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -694,7 +858,10 @@ export default function TicketPage({ ticketId, onBack }) {
               <InternalNotesTab ticket={ticket} ticketId={ticketId} />
             )}
             {activeTab === 'resolution' && (
-              <ResolutionTab ticket={ticket} ticketId={ticketId} />
+              <ResolutionTab ticket={ticket} ticketId={ticketId} onUpdate={updateAndRefresh} />
+            )}
+            {activeTab === 'history' && (
+              <HistoryTab ticket={ticket} />
             )}
           </div>
         </div>

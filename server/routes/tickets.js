@@ -4,20 +4,10 @@ const pool = require('../db');
 
 // ── helpers ───────────────────────────────────────────────────
 
-// Generate next ticket_ref by looking at the highest existing one
-async function nextTicketRef(client) {
-  const { rows } = await client.query(
-    "SELECT ticket_ref FROM tickets ORDER BY id DESC LIMIT 1"
-  );
-  if (rows.length === 0) return 'TKT-001';
-  const num = parseInt(rows[0].ticket_ref.replace('TKT-', ''), 10);
-  return `TKT-${String(num + 1).padStart(3, '0')}`;
-}
-
 // Shape a DB row into the format the frontend expects.
 // The row may include assignee columns from a LEFT JOIN on users —
 // we always emit the assignment fields so the frontend can rely on them.
-function formatTicket(row, messages = []) {
+function formatTicket(row, messages = [], events = []) {
   return {
     id: row.ticket_ref,
     subject: row.subject,
@@ -41,6 +31,18 @@ function formatTicket(row, messages = []) {
       text: m.body,
       time: m.created_at,
       type: m.type ?? 'message',
+    })),
+    // Audit trail — chronological list of state transitions.
+    // Empty array on list endpoint (events aren't fetched there),
+    // populated by GET /api/tickets/:id.
+    events: events.map((e) => ({
+      id: e.id,
+      eventType: e.event_type,
+      fromValue: e.from_value ?? null,
+      toValue: e.to_value ?? null,
+      actorName: e.actor_name ?? null,
+      actorEmail: e.actor_email ?? null,
+      createdAt: e.created_at,
     })),
   };
 }
@@ -102,12 +104,22 @@ router.get('/:id', async (req, res) => {
     }
 
     const ticket = ticketRows[0];
-    const { rows: msgRows } = await pool.query(
-      'SELECT * FROM messages WHERE ticket_id = $1 ORDER BY created_at ASC',
-      [ticket.id]
-    );
 
-    res.json(formatTicket(ticket, msgRows));
+    // Run messages and events queries in parallel — they're independent.
+    // Promise.all fires both immediately and resolves when both finish,
+    // roughly halving the round-trip compared to sequential awaits.
+    const [{ rows: msgRows }, { rows: eventRows }] = await Promise.all([
+      pool.query(
+        'SELECT * FROM messages WHERE ticket_id = $1 ORDER BY created_at ASC',
+        [ticket.id]
+      ),
+      pool.query(
+        'SELECT * FROM ticket_events WHERE ticket_id = $1 ORDER BY created_at ASC',
+        [ticket.id]
+      ),
+    ]);
+
+    res.json(formatTicket(ticket, msgRows, eventRows));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch ticket' });
@@ -126,13 +138,11 @@ router.post('/', async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const ticketRef = await nextTicketRef(client);
     const { rows } = await client.query(
       `INSERT INTO tickets (ticket_ref, subject, customer_email, category, priority, phone, company)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       VALUES ('TKT-' || LPAD(nextval('ticket_ref_seq')::TEXT, 3, '0'), $1, $2, $3, $4, $5, $6)
        RETURNING *`,
       [
-        ticketRef,
         subject.trim(),
         customerEmail.trim().toLowerCase(),
         category || 'General',
@@ -166,8 +176,13 @@ router.post('/', async (req, res) => {
 });
 
 // ── PATCH /api/tickets/:id ────────────────────────────────────
-// Accepts: { status, priority, assigned_to } — updates only the fields provided.
+// Accepts: { status, priority, resolution, assigned_to }
 // assigned_to must be an integer user ID (agent or admin role), or null to unassign.
+//
+// Audit trail: we fetch the current ticket row first ("old" state), apply the
+// update, then diff old vs new to insert a ticket_events row for each field
+// that actually changed. This "fetch → diff → update → log" is the standard
+// pattern for change-detection in REST backends.
 router.patch('/:id', async (req, res) => {
   // resolution is a free-text field — no special validation needed beyond
   // accepting null (clear it) or a string (set it).
@@ -220,24 +235,122 @@ router.patch('/:id', async (req, res) => {
     return res.status(400).json({ error: 'No valid fields to update' });
   }
 
-  // Build SET clause dynamically: "status = $1, assigned_to = $2"
-  const setClauses = Object.keys(updates).map((k, i) => `${k} = $${i + 1}`);
-  const values = [...Object.values(updates), req.params.id];
-
+  const client = await pool.connect();
   try {
-    // After updating, re-JOIN users so the response includes fresh assignee data —
-    // same shape as GET endpoints so the frontend state merge works cleanly.
-    const { rows } = await pool.query(
-      `UPDATE tickets SET ${setClauses.join(', ')}
-       WHERE ticket_ref = $${values.length}
-       RETURNING *`,
-      values
+    await client.query('BEGIN');
+
+    // ── Step 1: fetch current state ("old" snapshot) ──────────
+    // We need this to diff against the incoming body. Without it we can't
+    // know whether a field actually changed (e.g. PATCH {status:'open'} on a
+    // ticket that's already open — no real change, so no event should fire).
+    const { rows: oldRows } = await client.query(
+      `SELECT t.*,
+              u.name  AS assignee_name,
+              u.email AS assignee_email
+       FROM tickets t
+       LEFT JOIN users u ON u.id = t.assigned_to
+       WHERE t.ticket_ref = $1`,
+      [req.params.id]
     );
-    if (rows.length === 0) {
+    if (oldRows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Ticket not found' });
     }
+    const old = oldRows[0];
 
-    // Fetch with JOIN to get assignee name/email in the response
+    // ── Step 2: apply the update ──────────────────────────────
+    // Build SET clause dynamically: "status = $1, assigned_to = $2"
+    const setClauses = Object.keys(updates).map((k, i) => `${k} = $${i + 1}`);
+    const values = [...Object.values(updates), old.id];
+
+    await client.query(
+      `UPDATE tickets SET ${setClauses.join(', ')} WHERE id = $${values.length}`,
+      values
+    );
+
+    // ── Step 3: fetch actor info for the event rows ───────────
+    // req.session.userId comes from requireAuth middleware.
+    // We snapshot name+email now so the events survive future user deletion.
+    const actorId = req.session.userId;
+    let actorName = null;
+    let actorEmail = null;
+
+    if (actorId) {
+      const { rows: actorRows } = await client.query(
+        'SELECT name, email FROM users WHERE id = $1',
+        [actorId]
+      );
+      if (actorRows.length > 0) {
+        actorName = actorRows[0].name;
+        actorEmail = actorRows[0].email;
+      }
+    }
+
+    // ── Step 4: diff old vs new and insert events ─────────────
+    // Each condition only fires when the value genuinely changed —
+    // we skip no-op patches (e.g. re-saving the same status).
+    const eventInsert = `
+      INSERT INTO ticket_events
+        (ticket_id, actor_id, actor_name, actor_email, event_type, from_value, to_value)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)`;
+    const baseParams = [old.id, actorId, actorName, actorEmail];
+
+    // status changed?
+    if (updates.status !== undefined && updates.status !== old.status) {
+      await client.query(eventInsert, [
+        ...baseParams, 'status_changed', old.status, updates.status,
+      ]);
+    }
+
+    // priority changed?
+    if (updates.priority !== undefined && updates.priority !== old.priority) {
+      await client.query(eventInsert, [
+        ...baseParams, 'priority_changed', old.priority, updates.priority,
+      ]);
+    }
+
+    // assigned_to changed?
+    if (updates.assigned_to !== undefined) {
+      const oldAssignedTo = old.assigned_to ?? null;
+      const newAssignedTo = updates.assigned_to;
+
+      if (newAssignedTo !== oldAssignedTo) {
+        if (newAssignedTo === null) {
+          // Unassign — record who was previously assigned using the denormalized name
+          await client.query(eventInsert, [
+            ...baseParams, 'unassigned', old.assignee_name ?? String(oldAssignedTo), null,
+          ]);
+        } else {
+          // Assign — look up the new assignee's name for the to_value snapshot
+          const { rows: newAssigneeRows } = await client.query(
+            'SELECT name FROM users WHERE id = $1',
+            [newAssignedTo]
+          );
+          const newAssigneeName = newAssigneeRows[0]?.name ?? String(newAssignedTo);
+          await client.query(eventInsert, [
+            ...baseParams, 'assigned', old.assignee_name ?? null, newAssigneeName,
+          ]);
+        }
+      }
+    }
+
+    // resolution set? (was null/empty, now has content)
+    // We intentionally don't fire on every edit — only on the transition
+    // from "no resolution" to "has resolution". Subsequent edits are just
+    // content changes, not a meaningful state transition.
+    if (
+      updates.resolution !== undefined &&
+      updates.resolution &&             // truthy: non-null, non-empty string
+      !old.resolution                   // was previously empty/null
+    ) {
+      await client.query(eventInsert, [
+        ...baseParams, 'resolution_set', null, null,
+      ]);
+    }
+
+    await client.query('COMMIT');
+
+    // ── Step 5: return fresh ticket with JOIN for assignee data ──
     const { rows: joined } = await pool.query(
       `SELECT t.*,
               u.name  AS assignee_name,
@@ -245,12 +358,15 @@ router.patch('/:id', async (req, res) => {
        FROM tickets t
        LEFT JOIN users u ON u.id = t.assigned_to
        WHERE t.id = $1`,
-      [rows[0].id]
+      [old.id]
     );
     res.json(formatTicket(joined[0]));
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ error: 'Failed to update ticket' });
+  } finally {
+    client.release();
   }
 });
 

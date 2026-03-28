@@ -44,7 +44,16 @@ export function TicketProvider({ children }) {
     });
     if (!res.ok) throw new Error('Failed to update ticket');
     const updated = await res.json();
-    setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, ...updated } : t)));
+    setTickets((prev) =>
+      prev.map((t) => {
+        if (t.id !== id) return t;
+        // PATCH response doesn't include events (no round-trip to ticket_events).
+        // Preserve the already-loaded events array from the previous state so
+        // agents see history that was fetched by loadTicket without a full reload.
+        // loadTicket (called on mount) will always have the authoritative list.
+        return { ...t, ...updated, events: t.events ?? [] };
+      })
+    );
   }
 
   async function deleteTicket(id) {

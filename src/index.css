@@ -3324,3 +3324,131 @@ body {
   justify-content: flex-end;
   padding-top: 4px;
 }
+
+/* ── Ticket History ──────────────────────────────────────────── */
+
+/*
+  Layout: the History tab uses .tp-history-content (scrollable column).
+  Inside it, .hist-timeline is an ordered list where each <li> is a row with:
+    - a colored dot (position: relative, sits on the connecting line)
+    - a content block (label + timestamp)
+
+  The connecting line is a pseudo-element on each .hist-row, drawn as a thin
+  left border from the dot downward. The last row has no connecting line below
+  its dot — achieved by :last-child selector.
+*/
+
+.tp-history-content {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gray-200) transparent;
+}
+
+.tp-history-content::-webkit-scrollbar { width: 4px; }
+.tp-history-content::-webkit-scrollbar-thumb {
+  background: var(--gray-200);
+  border-radius: 4px;
+}
+
+.hist-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 8px;
+  color: var(--gray-400);
+  font-size: 13px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+/* Ordered list — reset list styles, set up the left gutter for the line */
+.hist-timeline {
+  list-style: none;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  /* No gap here — the connecting line is drawn via pseudo-element height,
+     so we control spacing through .hist-row padding instead */
+}
+
+/*
+  Each row: flex row with a fixed-width gutter on the left for the dot + line.
+  The connecting line is a pseudo-element — a 1px left border running the
+  full height of the row. The dot sits centered in the gutter, on top of the line.
+*/
+.hist-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-bottom: 20px;
+  position: relative;
+}
+
+/* The connecting line — a thin vertical rule below each dot except the last */
+.hist-row:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  /* Left offset: half of the gutter (dot is 10px wide, gap-left is 28px from list) */
+  left: 32px;             /* 28px padding + half of 10px dot = 33px; tweak to taste */
+  top: 20px;              /* starts just below the dot center */
+  bottom: 0;
+  width: 1px;
+  background: var(--gray-200);
+}
+
+/* The dot — colored circle overlaid on the connecting line */
+.hist-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 4px;        /* aligns with first line of text */
+  position: relative;     /* sits above the ::before line */
+  z-index: 1;
+  border: 2px solid #fff; /* knockout ring so dot doesn't bleed into the line */
+  box-shadow: 0 0 0 1px currentColor;
+}
+
+/* Dot color per event type — uses existing CSS token palette where possible */
+.hist-dot--status     { background: #4a80f5; color: #4a80f5; }   /* brand blue */
+.hist-dot--priority   { background: #f57c3a; color: #f57c3a; }   /* high-priority orange */
+.hist-dot--assigned   { background: #27ae60; color: #27ae60; }   /* open-status green */
+.hist-dot--unassigned { background: #9aa3b5; color: #9aa3b5; }   /* muted gray */
+.hist-dot--resolution { background: #9b59b6; color: #9b59b6; }   /* purple — distinct from others */
+
+/* Right-side content block */
+.hist-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* Human-readable sentence */
+.hist-label {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--gray-700);
+}
+
+/* Actor name within the label — semibold so it stands out without a container */
+.hist-actor {
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+/* Values within the label (from/to) — inherit bold from <strong> in JSX */
+.hist-label strong {
+  color: var(--gray-900);
+}
+
+/* Relative/absolute timestamp — muted, small, right below the sentence */
+.hist-time {
+  font-size: 11px;
+  color: var(--gray-400);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.1px;
+}

@@ -111,3 +111,60 @@ ALTER TABLE tickets ADD COLUMN IF NOT EXISTS resolution TEXT;
 -- DEFAULT 'message' means this migration is safe against existing rows:
 -- every row that was inserted without a type is treated as a regular message.
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS type VARCHAR(20) NOT NULL DEFAULT 'message';
+
+-- ── Migration: ticket audit trail ────────────────────────────
+-- ticket_events is an append-only log of meaningful state transitions.
+-- Never update or delete rows — immutability is what makes an audit trail trustworthy.
+--
+-- actor_name / actor_email are denormalized snapshots intentionally:
+--   If we only stored actor_id and joined users at read time, events written
+--   by a user who was later deleted would lose their "who" entirely.
+--   Snapshotting at write time makes each event self-contained.
+--
+-- ON DELETE CASCADE on ticket_id: when the ticket is deleted its history
+--   has no referent — cascading is correct here. This mirrors messages.
+--   (Compare: assigned_to on tickets uses SET NULL because an unassigned
+--   ticket is still meaningful; a history row without a ticket is not.)
+CREATE TABLE IF NOT EXISTS ticket_events (
+  id          SERIAL PRIMARY KEY,
+  ticket_id   INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  actor_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  actor_name  TEXT,                    -- snapshot so events survive user deletion
+  actor_email TEXT,
+  event_type  VARCHAR(50) NOT NULL,    -- see values below
+  from_value  TEXT,                    -- previous value (null for initial/unassigned)
+  to_value    TEXT,                    -- new value
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  -- event_type values:
+  --   'status_changed'   — status field changed
+  --   'priority_changed' — priority field changed
+  --   'assigned'         — assigned_to set to a user (to_value = assignee name)
+  --   'unassigned'       — assigned_to cleared (from_value = previous assignee name)
+  --   'resolution_set'   — resolution text was set (was null/empty, now has content)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_events_ticket_id ON ticket_events(ticket_id);
+
+-- ── Migration: atomic ticket ref sequence ────────────────────
+-- Replaces the in-app max+increment approach, which has a race condition
+-- under concurrent POSTs (two transactions can read the same max before
+-- either commits). nextval() is atomic by design — Postgres guarantees
+-- each caller gets a distinct value even under concurrency.
+CREATE SEQUENCE IF NOT EXISTS ticket_ref_seq;
+
+-- Advance the sequence past any refs already in the table so the first
+-- nextval() call doesn't collide with seed/existing data.
+-- setval(..., false) sets the sequence's last_value without consuming it,
+-- meaning the next nextval() call returns exactly that value.
+-- The GREATEST(..., 0) guard handles an empty table (MAX returns NULL).
+DO $$
+BEGIN
+  PERFORM setval(
+    'ticket_ref_seq',
+    GREATEST(
+      (SELECT MAX(CAST(REPLACE(ticket_ref, 'TKT-', '') AS INTEGER)) FROM tickets),
+      0
+    ),
+    false
+  );
+END $$;

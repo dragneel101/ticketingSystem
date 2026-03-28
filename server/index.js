@@ -12,6 +12,9 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+// Trust the first proxy (Traefik on Coolify) so secure cookies work over HTTPS
+app.set('trust proxy', 1);
+
 // ── Sessions ─────────────────────────────────────────────────
 // connect-pg-simple needs the pg Pool directly (not via a require wrapper),
 // so we pass pool in when constructing the store.

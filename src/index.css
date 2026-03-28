@@ -124,7 +124,7 @@ body {
    ============================================================ */
 .app-shell {
   display: flex;
-  height: 100%;
+  flex: 1;
   overflow: hidden;
 }
 
@@ -1181,6 +1181,63 @@ body {
   background: rgba(255, 255, 255, 0.07);
   color: #e4e8f0;
   border-color: var(--brand-border);
+}
+
+/* ============================================================
+   APP HEADER
+   ============================================================ */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.25rem;
+  height: var(--header-height);
+  min-height: var(--header-height);
+  background: #fff;
+  border-bottom: 1px solid var(--gray-200);
+  box-shadow: var(--shadow-sm);
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.app-header-brand {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--brand);
+  letter-spacing: -0.01em;
+}
+
+.app-header-user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.app-header-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--gray-600);
+}
+
+.app-header-logout {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  background: none;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--r-md);
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: color var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              background var(--t-fast) var(--ease);
+}
+
+.app-header-logout:hover {
+  color: var(--gray-900);
+  border-color: var(--gray-400);
+  background: var(--gray-50);
 }
 
 /* ============================================================

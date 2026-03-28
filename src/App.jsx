@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TicketProvider } from './context/TicketContext';
-import { ToastProvider } from './context/ToastContext';
+import { ToastProvider, useToast } from './context/ToastContext';
 import TicketList from './components/TicketList';
 import TicketDetail, { EmptyState } from './components/TicketDetail';
 import NewTicketForm from './components/NewTicketForm';
@@ -10,8 +10,14 @@ import LoginForm from './components/LoginForm';
 /* ── inner shell — must be inside TicketProvider ─────────── */
 function AppShell() {
   const { user, logout } = useAuth();
+  const { addToast } = useToast();
   const [selectedId, setSelectedId] = useState(null);
   const [showNewTicket, setShowNewTicket] = useState(false);
+
+  async function handleLogout() {
+    await logout();
+    addToast('Logged out', 'info');
+  }
 
   const handleSelectTicket = useCallback((id) => {
     setSelectedId((prev) => (prev === id ? null : id));
@@ -26,30 +32,40 @@ function AppShell() {
   }, []);
 
   return (
-    <div className="app-shell">
-      <TicketList
-        selectedId={selectedId}
-        onSelect={handleSelectTicket}
-        onNewTicket={handleNewTicket}
-        currentUser={user}
-        onLogout={logout}
-      />
+    <>
+      <header className="app-header">
+        <span className="app-header-brand">Support Portal</span>
+        <div className="app-header-user">
+          <span className="app-header-name">{user?.name}</span>
+          <button className="app-header-logout" onClick={handleLogout}>Sign out</button>
+        </div>
+      </header>
 
-      <main className="main-content" role="main" aria-label="Ticket detail">
-        {selectedId ? (
-          <TicketDetail key={selectedId} ticketId={selectedId} />
-        ) : (
-          <EmptyState />
-        )}
-      </main>
-
-      {showNewTicket && (
-        <NewTicketForm
-          onClose={handleCloseForm}
-          onCreated={handleTicketCreated}
+      <div className="app-shell">
+        <TicketList
+          selectedId={selectedId}
+          onSelect={handleSelectTicket}
+          onNewTicket={handleNewTicket}
+          currentUser={user}
+          onLogout={handleLogout}
         />
-      )}
-    </div>
+
+        <main className="main-content" role="main" aria-label="Ticket detail">
+          {selectedId ? (
+            <TicketDetail key={selectedId} ticketId={selectedId} />
+          ) : (
+            <EmptyState />
+          )}
+        </main>
+
+        {showNewTicket && (
+          <NewTicketForm
+            onClose={handleCloseForm}
+            onCreated={handleTicketCreated}
+          />
+        )}
+      </div>
+    </>
   );
 }
 

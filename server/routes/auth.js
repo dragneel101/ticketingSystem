@@ -113,6 +113,22 @@ router.post('/users', adminOnly, async (req, res) => {
   const assignedRole = validRoles.includes(role) ? role : 'agent';
 
   try {
+    // Fetch the current policy before hashing. We do this inside the try block
+    // so a DB error here gets caught and returns a 500 rather than an unhandled
+    // rejection. We fall back to 10 (the hard floor) if the row is somehow missing.
+    const { rows: settingRows } = await pool.query(
+      `SELECT value FROM settings WHERE key = 'min_password_length'`
+    );
+    const minLength = settingRows.length ? parseInt(settingRows[0].value, 10) : 10;
+
+    // Server-side enforcement — the UI also validates, but this is the real gate.
+    // An attacker sending a raw POST skips the UI entirely, so we must check here.
+    if (password.length < minLength) {
+      return res.status(400).json({
+        error: `Password must be at least ${minLength} characters`,
+      });
+    }
+
     const hash = await bcrypt.hash(password, 10);
     const { rows } = await pool.query(
       `INSERT INTO users (email, name, password_hash, role)

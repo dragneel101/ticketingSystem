@@ -68,3 +68,19 @@ VALUES
   (3, 'carol@example.com',   'Would love to see a dark mode option in the dashboard.',                                        '2026-03-20T11:45:00Z'),
   (3, 'support@company.com', 'Great suggestion! Dark mode is already on our roadmap for Q2. We''ll notify you when it''s live.', '2026-03-20T13:10:00Z')
 ON CONFLICT DO NOTHING;
+
+-- ── Settings (runtime-configurable key/value store) ───────────
+-- Storing settings in the DB (rather than env vars) means they can be
+-- changed at runtime by admins without a redeploy or server restart.
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+-- Seed the minimum password length policy.
+-- '10' is the hard floor — the PATCH /api/settings route refuses to go lower.
+-- ON CONFLICT DO NOTHING so re-running schema.sql doesn't reset a value an
+-- admin has already changed.
+INSERT INTO settings (key, value)
+VALUES ('min_password_length', '10')
+ON CONFLICT (key) DO NOTHING;

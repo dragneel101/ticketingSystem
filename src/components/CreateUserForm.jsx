@@ -1,10 +1,29 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useToast } from '../context/ToastContext';
 
 export default function CreateUserForm({ onClose, onCreated }) {
   const { addToast } = useToast();
   const [form, setForm] = useState({ email: '', name: '', password: '', role: 'agent' });
   const [loading, setLoading] = useState(false);
+  // Start at null so we know the difference between "not yet fetched" and
+  // "fetched and it's 10". We fall back to 10 (the hard floor) if the fetch
+  // fails so the form is still usable rather than broken.
+  const [minPasswordLength, setMinPasswordLength] = useState(null);
+
+  useEffect(() => {
+    async function loadPolicy() {
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        if (res.ok) setMinPasswordLength(data.min_password_length);
+      } catch {
+        // Silent fallback — the server will enforce the real policy on submit.
+        // We don't toast here because a settings fetch failure shouldn't block
+        // the admin from creating a user.
+      }
+    }
+    loadPolicy();
+  }, []);
 
   function set(field, value) {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -56,7 +75,20 @@ export default function CreateUserForm({ onClose, onCreated }) {
           </div>
           <div className="form-field">
             <label htmlFor="cu-password">Password</label>
-            <input id="cu-password" type="password" value={form.password} onChange={e => set('password', e.target.value)} required minLength={6} />
+            <input
+              id="cu-password"
+              type="password"
+              value={form.password}
+              onChange={e => set('password', e.target.value)}
+              required
+              // minPasswordLength is null while fetching — fall back to the hard
+              // floor (10) so the attribute is always a meaningful constraint.
+              minLength={minPasswordLength ?? 10}
+            />
+            {/* Helper text reflects the live policy, not a hardcoded number */}
+            <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--gray-500)' }}>
+              Minimum {minPasswordLength ?? 10} characters
+            </p>
           </div>
           <div className="form-field">
             <label htmlFor="cu-role">Role</label>

@@ -7,6 +7,7 @@ import TicketDetail, { EmptyState } from './components/TicketDetail';
 import NewTicketForm from './components/NewTicketForm';
 import LoginForm from './components/LoginForm';
 import CreateUserForm from './components/CreateUserForm';
+import PasswordPolicyForm from './components/PasswordPolicyForm';
 
 /* ── inner shell — must be inside TicketProvider ─────────── */
 function AppShell() {
@@ -15,6 +16,7 @@ function AppShell() {
   const [selectedId, setSelectedId] = useState(null);
   const [showNewTicket, setShowNewTicket] = useState(false);
   const [showCreateUser, setShowCreateUser] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   async function handleLogout() {
     await logout();
@@ -38,9 +40,14 @@ function AppShell() {
       <header className="app-header">
         <span className="app-header-brand">Support Portal</span>
         {user?.role === 'admin' && (
-          <button className="app-header-admin-btn" onClick={() => setShowCreateUser(true)}>
-            + Add User
-          </button>
+          <>
+            <button className="app-header-admin-btn" onClick={() => setShowSettings(true)}>
+              Settings
+            </button>
+            <button className="app-header-admin-btn" onClick={() => setShowCreateUser(true)}>
+              + Add User
+            </button>
+          </>
         )}
         <div className="app-header-user">
           <span className="app-header-name">{user?.name}</span>
@@ -74,6 +81,9 @@ function AppShell() {
       </div>
       {showCreateUser && (
         <CreateUserForm onClose={() => setShowCreateUser(false)} />
+      )}
+      {showSettings && (
+        <PasswordPolicyForm onClose={() => setShowSettings(false)} />
       )}
     </>
   );

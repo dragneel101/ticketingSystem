@@ -60,6 +60,13 @@ app.get('/api/healthz', async (req, res) => {
 const authRouter = require('./routes/auth');
 app.use('/api/auth', authRouter);
 
+// ── Settings routes (admin only) ─────────────────────────────
+// adminOnly is applied per-route inside the router, but we still apply
+// requireAuth here so unauthenticated requests get a 401 (not a 403)
+// before we even reach the adminOnly check.
+const settingsRouter = require('./routes/settings');
+app.use('/api/settings', requireAuth, settingsRouter);
+
 // ── Ticket routes (protected) ────────────────────────────────
 // requireAuth runs before any ticket route handler.
 // If the session is missing, it short-circuits with 401.

@@ -1559,6 +1559,245 @@ body {
   background: #e0e0fd;
 }
 
+/* ============================================================
+   ADMIN NAV (header tab strip)
+   ============================================================ */
+.app-header-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  /* Flex-grow centers the nav between the brand and the user section.
+     Without this, the nav would hug the brand on the left. */
+  flex: 1;
+  justify-content: center;
+}
+
+.app-header-nav-item {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--gray-500);
+  background: none;
+  border: none;
+  border-radius: var(--r-md);
+  padding: 0.35rem 0.85rem;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: color var(--t-fast) var(--ease),
+              background var(--t-fast) var(--ease);
+}
+
+.app-header-nav-item:hover {
+  color: var(--gray-800);
+  background: var(--gray-100);
+}
+
+/* Active state: brand color + subtle background, no border needed */
+.app-header-nav-item--active {
+  color: var(--brand);
+  background: var(--brand-light);
+  font-weight: 600;
+}
+
+.app-header-nav-item--active:hover {
+  background: var(--brand-light);
+  color: var(--brand-hover);
+}
+
+/* ============================================================
+   ADMIN PAGES (User Management + Admin Config)
+   ============================================================ */
+.admin-page {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--gray-50);
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-page-header {
+  background: #fff;
+  border-bottom: 1px solid var(--gray-200);
+  padding: 1.5rem 2rem;
+  flex-shrink: 0;
+}
+
+.admin-page-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-page-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  letter-spacing: -0.02em;
+}
+
+.admin-page-subtitle {
+  font-size: 0.82rem;
+  color: var(--gray-500);
+  margin-top: 0.2rem;
+}
+
+.admin-page-body {
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  max-width: 860px; /* Keeps content readable on wide screens */
+}
+
+.admin-page-loading {
+  color: var(--gray-400);
+  font-size: 0.875rem;
+  padding: 1rem 0;
+}
+
+/* ── Settings page sections ─────────────────────────────── */
+.settings-section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gray-400);
+  margin-bottom: 0.75rem;
+}
+
+.settings-card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* inline-form-host strips the modal chrome from PasswordPolicyForm.
+   The form renders: modal-backdrop > modal-card > modal-header / modal-body.
+   We hide the backdrop and card framing, then let the inner content breathe. */
+.inline-form-host .modal-backdrop {
+  position: static;    /* removes the fixed overlay */
+  background: none;
+  display: block;      /* from flex — so modal-card isn't centered */
+  padding: 0;
+}
+
+.inline-form-host .modal-card {
+  box-shadow: none;
+  border-radius: 0;
+  max-width: none;
+  width: auto;
+  animation: none;
+}
+
+.inline-form-host .modal-header {
+  padding: 1.25rem 1.5rem 0;
+}
+
+/* Hide the close (×) button — there's nowhere to "close" to on a page */
+.inline-form-host .modal-close {
+  display: none;
+}
+
+.inline-form-host .modal-body {
+  padding: 1rem 1.5rem 1.5rem;
+}
+
+.inline-form-host .modal-footer {
+  padding-top: 1rem;
+}
+
+/* ── User table ─────────────────────────────────────────── */
+.user-table-wrap {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.user-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.user-table thead tr {
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.user-table th {
+  text-align: left;
+  padding: 0.65rem 1.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gray-400);
+}
+
+.user-table tbody tr {
+  border-bottom: 1px solid var(--gray-100);
+  transition: background var(--t-fast) var(--ease);
+}
+
+.user-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.user-table tbody tr:hover {
+  background: var(--gray-50);
+}
+
+.user-table td {
+  padding: 0.85rem 1.25rem;
+  color: var(--gray-700);
+}
+
+.user-table-name {
+  font-weight: 500;
+  color: var(--gray-800) !important;
+}
+
+.user-table-email {
+  color: var(--gray-500) !important;
+}
+
+.user-table-date {
+  color: var(--gray-400) !important;
+  font-size: 0.8rem !important;
+}
+
+.user-table-empty {
+  text-align: center;
+  color: var(--gray-400) !important;
+  padding: 2rem !important;
+}
+
+/* ── Role badge ─────────────────────────────────────────── */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--r-full);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: capitalize;
+}
+
+.role-badge--admin {
+  background: var(--brand-light);
+  color: var(--brand);
+}
+
+.role-badge--agent {
+  background: var(--gray-100);
+  color: var(--gray-600);
+}
+
 /* ── Create User modal ──────────────────────────────────── */
 .modal-backdrop {
   position: fixed;
@@ -1692,6 +1931,384 @@ body {
 .btn-secondary:hover {
   background: var(--gray-50);
   border-color: var(--gray-400);
+}
+
+/* ============================================================
+   DASHBOARD PAGE
+   ============================================================ */
+
+/* Page wrapper — same overflow pattern as .admin-page */
+.dash-page {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--gray-50);
+  display: flex;
+  flex-direction: column;
+  animation: fadeUp 280ms var(--ease-out) both;
+}
+
+/* ── page header ──────────────────────────────────────────── */
+.dash-header {
+  background: #fff;
+  border-bottom: 1px solid var(--gray-200);
+  padding: 1.5rem 2rem;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.dash-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  letter-spacing: -0.02em;
+}
+
+.dash-subtitle {
+  font-size: 0.82rem;
+  color: var(--gray-500);
+  margin-top: 0.2rem;
+}
+
+/* ── scrollable body ──────────────────────────────────────── */
+.dash-body {
+  padding: 1.75rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  /* Wide screens: cap at a comfortable reading width */
+  max-width: 1100px;
+  width: 100%;
+}
+
+/* ── loading state ────────────────────────────────────────── */
+.dash-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--gray-400);
+  font-size: 0.875rem;
+}
+
+.dash-loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--gray-200);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── stat cards row ───────────────────────────────────────── */
+.dash-stat-row {
+  display: grid;
+  /* 5 equal columns; collapses gracefully on smaller widths */
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1rem;
+}
+
+.dash-stat-card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1.25rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  /* Left accent strip driven by the --accent CSS variable set inline */
+  border-left: 3px solid var(--accent, var(--brand));
+  transition: box-shadow var(--t-fast) var(--ease),
+              transform var(--t-fast) var(--ease-out);
+}
+
+.dash-stat-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.dash-stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+
+.dash-stat-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--gray-400);
+}
+
+/* ── lower grid ───────────────────────────────────────────── */
+/* Two columns: priority chart (narrower) + recent list (wider) */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+/* ── card base (shared by chart, recent list, quick actions) ─ */
+.dash-card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.dash-card-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--gray-400);
+  margin-bottom: 1rem;
+}
+
+.dash-empty-section {
+  font-size: 0.85rem;
+  color: var(--gray-400);
+  padding: 0.5rem 0;
+}
+
+/* ── CSS bar chart ────────────────────────────────────────── */
+/*
+  Technique: each .dash-bar-fill div gets its width set as an inline
+  percentage style computed in JS. The track is a fixed-height container
+  that acts as the 100% reference. No library, no SVG, no canvas.
+
+  Why this works: the browser lays out percentage widths relative to the
+  parent's content width. We calculate pct = (count / max) * 100 in the
+  component, so the tallest priority bar always fills the full track and
+  all others scale proportionally to it.
+*/
+.dash-bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.dash-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.dash-bar-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 62px;          /* fixed so all tracks start at the same x-position */
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--gray-700);
+  text-transform: capitalize;
+}
+
+.dash-bar-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* The track is the full-width background; the fill sits inside it */
+.dash-bar-track {
+  flex: 1;
+  height: 8px;
+  background: var(--gray-100);
+  border-radius: var(--r-full);
+  overflow: hidden;
+}
+
+.dash-bar-fill {
+  height: 100%;
+  border-radius: var(--r-full);
+  transition: width 500ms var(--ease-out);
+  min-width: 4px; /* always show a sliver even for zero counts */
+}
+
+.dash-bar-count {
+  width: 22px;
+  text-align: right;
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--gray-500);
+}
+
+/* ── recent activity list ─────────────────────────────────── */
+.dash-recent-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  /* Negative margin trick: pulls the list edge to the card padding so
+     row borders span full width without extra wrapper divs */
+  margin: 0 -1.5rem;
+}
+
+.dash-recent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 1.5rem;
+  border-bottom: 1px solid var(--gray-100);
+  transition: background var(--t-fast) var(--ease);
+}
+
+.dash-recent-row:last-child {
+  border-bottom: none;
+}
+
+.dash-recent-row:hover {
+  background: var(--gray-50);
+}
+
+.dash-recent-info {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  min-width: 0;   /* allows text truncation to work inside a flex child */
+}
+
+.dash-recent-id {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-recent-subject {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--gray-800);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash-recent-date {
+  font-size: 0.75rem;
+  color: var(--gray-400);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-recent-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+/* Small circle indicator — title attribute gives the priority label */
+.dash-priority-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dash-view-btn {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--brand);
+  background: var(--brand-light);
+  border: 1px solid var(--brand-border);
+  border-radius: var(--r-sm);
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: background var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease);
+  white-space: nowrap;
+}
+
+.dash-view-btn:hover {
+  background: #e0e0fd;
+  color: var(--brand-hover);
+}
+
+/* ── quick actions (admin only) ───────────────────────────── */
+.dash-quick-actions {
+  /* Full width across the grid — used when rendered standalone below the grid */
+}
+
+.dash-action-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.dash-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: var(--sans);
+  color: var(--gray-700);
+  background: #fff;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease),
+              color var(--t-fast) var(--ease),
+              box-shadow var(--t-fast) var(--ease),
+              transform var(--t-fast) var(--ease-out);
+}
+
+.dash-action-btn:hover {
+  background: var(--gray-50);
+  border-color: var(--gray-300);
+  color: var(--gray-900);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.dash-action-btn:active {
+  transform: translateY(0);
+}
+
+/* ── responsive adjustments ───────────────────────────────── */
+@media (max-width: 860px) {
+  .dash-stat-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .dash-stat-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dash-body {
+    padding: 1rem;
+  }
 }
 
 .truncate {

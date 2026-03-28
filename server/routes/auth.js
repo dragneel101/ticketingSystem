@@ -103,6 +103,20 @@ router.get('/me', async (req, res) => {
 
 const adminOnly = require('../middleware/adminOnly');
 
+// GET /api/auth/users — admin only, lists all users (never exposes password_hash)
+// Ordered newest-first so freshly created users surface at the top of the table.
+router.get('/users', adminOnly, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, email, name, role, created_at FROM users ORDER BY created_at DESC'
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
 // POST /api/users — admin only, creates a new agent or admin user
 router.post('/users', adminOnly, async (req, res) => {
   const { email, name, password, role } = req.body;

@@ -160,4 +160,169 @@ router.post('/users', adminOnly, async (req, res) => {
   }
 });
 
+// ── DELETE /api/auth/users/:id ────────────────────────────────
+// Admin only. Hard-prevents self-deletion on the server.
+// Why here and not just the frontend? Because any admin with a valid session
+// cookie can hit this endpoint directly — the UI is advisory, the server is law.
+router.delete('/users/:id', adminOnly, async (req, res) => {
+  const targetId = parseInt(req.params.id, 10);
+
+  // parseInt returns NaN for non-numeric strings — guard early.
+  if (isNaN(targetId)) {
+    return res.status(400).json({ error: 'Invalid user id' });
+  }
+
+  // Self-deletion check: compare string form of both ids to avoid type mismatch
+  // (req.session.userId is stored as a number but params come in as strings).
+  if (targetId === req.session.userId) {
+    return res.status(400).json({ error: 'Cannot delete your own account' });
+  }
+
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM users WHERE id = $1',
+      [targetId]
+    );
+
+    // rowCount === 0 means the row didn't exist — surface a clean 404 rather
+    // than silently returning 204, so the frontend can distinguish "gone" from
+    // "already deleted".
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // 204 No Content is the REST convention for a successful delete with no body.
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// ── PATCH /api/auth/users/:id ─────────────────────────────────
+// Admin only. Accepts { name, email, role } — all optional.
+// Prevents an admin from changing their own role (self-lockout protection).
+router.patch('/users/:id', adminOnly, async (req, res) => {
+  const targetId = parseInt(req.params.id, 10);
+  if (isNaN(targetId)) {
+    return res.status(400).json({ error: 'Invalid user id' });
+  }
+
+  const { name, email, role } = req.body;
+
+  // Self-role-change guard: changing your own role to 'agent' would strip your
+  // admin access immediately — the next adminOnly request would 403. Prevent it.
+  if (role !== undefined && targetId === req.session.userId) {
+    return res.status(400).json({ error: 'Cannot change your own role' });
+  }
+
+  // Validate inputs only when they're present — all fields are optional.
+  if (email !== undefined) {
+    // Simple but effective email check: must contain @ with chars on both sides.
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      return res.status(400).json({ error: 'Invalid email address' });
+    }
+  }
+
+  if (role !== undefined && !['admin', 'agent'].includes(role)) {
+    return res.status(400).json({ error: 'Role must be admin or agent' });
+  }
+
+  // Build the SET clause dynamically so we only update provided fields.
+  // We accumulate column assignments and their values in parallel arrays,
+  // then join them into the SQL string. This avoids overwriting fields that
+  // weren't sent in the request body.
+  const setClauses = [];
+  const values = [];
+  let idx = 1;
+
+  if (name !== undefined) {
+    setClauses.push(`name = $${idx++}`);
+    values.push(name.trim());
+  }
+  if (email !== undefined) {
+    setClauses.push(`email = $${idx++}`);
+    values.push(email.trim().toLowerCase());
+  }
+  if (role !== undefined) {
+    setClauses.push(`role = $${idx++}`);
+    values.push(role);
+  }
+
+  if (setClauses.length === 0) {
+    return res.status(400).json({ error: 'No fields provided to update' });
+  }
+
+  // The WHERE clause placeholder index comes after all SET values.
+  values.push(targetId);
+
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${idx}
+       RETURNING id, email, name, role`,
+      values
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(rows[0]);
+  } catch (err) {
+    // Postgres unique constraint violation on the email column
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Email already in use' });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+// ── POST /api/auth/users/:id/reset-password ───────────────────
+// Admin only. Accepts { password }. Enforces the same min_password_length
+// policy as user creation — the admin can't set a password weaker than the
+// current policy even when resetting.
+router.post('/users/:id/reset-password', adminOnly, async (req, res) => {
+  const targetId = parseInt(req.params.id, 10);
+  if (isNaN(targetId)) {
+    return res.status(400).json({ error: 'Invalid user id' });
+  }
+
+  const { password } = req.body;
+  if (!password) {
+    return res.status(400).json({ error: 'password is required' });
+  }
+
+  try {
+    // Fetch the live policy — same pattern as POST /api/auth/users.
+    // Falling back to 10 keeps the route functional even if settings are missing.
+    const { rows: settingRows } = await pool.query(
+      `SELECT value FROM settings WHERE key = 'min_password_length'`
+    );
+    const minLength = settingRows.length ? parseInt(settingRows[0].value, 10) : 10;
+
+    if (password.length < minLength) {
+      return res.status(400).json({
+        error: `Password must be at least ${minLength} characters`,
+      });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+
+    const { rowCount } = await pool.query(
+      'UPDATE users SET password_hash = $1 WHERE id = $2',
+      [hash, targetId]
+    );
+
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ message: 'Password updated' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
 module.exports = router;

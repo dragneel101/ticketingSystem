@@ -1934,6 +1934,147 @@ body {
 }
 
 /* ============================================================
+   USER MANAGEMENT — ACTION BUTTONS & DELETE CONFIRMATION
+   ============================================================ */
+
+/* Danger token — used for delete actions. Defined once here so it's
+   easy to update globally if the design system changes. */
+:root {
+  --danger:       #e53e3e;
+  --danger-hover: #c53030;
+  --danger-light: rgba(229, 62, 62, 0.10);
+}
+
+/* Actions column: auto-width, right-aligned, no wrap */
+.user-table-actions {
+  white-space: nowrap;
+  text-align: right;
+  padding-right: 1rem !important;
+}
+
+/* Container for the three action buttons in normal state */
+.user-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Base style for all three row action buttons.
+   Ghost-style: no background, subtle border on hover. Keeps the table
+   clean — actions don't compete with the data until you look at a row. */
+.btn-row-action {
+  padding: 0.3rem 0.65rem;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--gray-600);
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+
+.btn-row-action:hover:not(:disabled) {
+  background: var(--gray-100);
+  border-color: var(--gray-300);
+  color: var(--gray-800);
+}
+
+.btn-row-action:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Danger variant — Delete button in normal state */
+.btn-row-action--danger {
+  color: var(--danger);
+}
+
+.btn-row-action--danger:hover:not(:disabled) {
+  background: var(--danger-light);
+  border-color: rgba(229, 62, 62, 0.3);
+  color: var(--danger);
+}
+
+/* Inline delete confirmation — replaces the action buttons for the row
+   being confirmed. Stays in the same table cell so the user's eyes stay
+   on the row they're about to destroy. */
+.user-delete-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  animation: fadeIn 120ms var(--ease-out) both;
+}
+
+.user-delete-confirm-text {
+  font-size: 0.8rem;
+  color: var(--gray-600);
+  font-weight: 500;
+  margin-right: 0.2rem;
+}
+
+/* Cancel button in confirmation state — same ghost style as btn-row-action */
+.btn-action-cancel {
+  padding: 0.3rem 0.65rem;
+  background: none;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--r-sm);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--gray-600);
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+
+.btn-action-cancel:hover:not(:disabled) {
+  background: var(--gray-100);
+  border-color: var(--gray-400);
+}
+
+/* Confirm Delete button — filled danger red, not a ghost.
+   The color change from "Delete" (ghost) to "Confirm Delete" (solid red)
+   reinforces that this second click is the point of no return. */
+.btn-action-danger {
+  padding: 0.3rem 0.75rem;
+  background: var(--danger);
+  color: #fff;
+  border: 1px solid var(--danger);
+  border-radius: var(--r-sm);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast);
+}
+
+.btn-action-danger:hover:not(:disabled) {
+  background: var(--danger-hover);
+  border-color: var(--danger-hover);
+}
+
+.btn-action-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Hint text under form fields (role-disabled note, password min length) */
+.form-field-hint {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--gray-500);
+}
+
+/* Target label in ResetPasswordModal — "Setting new password for Jane" */
+.reset-pw-target {
+  font-size: 0.875rem;
+  color: var(--gray-600);
+  margin: 0;
+}
+
+.reset-pw-target strong {
+  color: var(--gray-800);
+}
+
+/* ============================================================
    DASHBOARD PAGE
    ============================================================ */
 

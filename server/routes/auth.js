@@ -52,7 +52,7 @@ router.post('/login', async (req, res) => {
           console.error('Session save error', saveErr);
           return res.status(500).json({ error: 'Session error' });
         }
-        res.json({ id: user.id, email: user.email, name: user.name });
+        res.json({ id: user.id, email: user.email, name: user.name, role: user.role });
       });
     });
   } catch (err) {
@@ -84,7 +84,7 @@ router.get('/me', async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      'SELECT id, email, name FROM users WHERE id = $1',
+      'SELECT id, email, name, role FROM users WHERE id = $1',
       [req.session.userId]
     );
 
@@ -98,6 +98,35 @@ router.get('/me', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
+const adminOnly = require('../middleware/adminOnly');
+
+// POST /api/users — admin only, creates a new agent or admin user
+router.post('/users', adminOnly, async (req, res) => {
+  const { email, name, password, role } = req.body;
+  if (!email?.trim() || !name?.trim() || !password) {
+    return res.status(400).json({ error: 'email, name, and password are required' });
+  }
+  const validRoles = ['agent', 'admin'];
+  const assignedRole = validRoles.includes(role) ? role : 'agent';
+
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const { rows } = await pool.query(
+      `INSERT INTO users (email, name, password_hash, role)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, email, name, role`,
+      [email.trim().toLowerCase(), name.trim(), hash, assignedRole]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Email already in use' });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create user' });
   }
 });
 

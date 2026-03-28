@@ -47,6 +47,12 @@ export function TicketProvider({ children }) {
     setTickets((prev) => prev.map((t) => (t.id === id ? { ...t, ...updated } : t)));
   }
 
+  async function deleteTicket(id) {
+    const res = await fetch(`/api/tickets/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error((await res.json()).error);
+    setTickets(prev => prev.filter(t => t.id !== id));
+  }
+
   async function addMessage(ticketId, message) {
     const res = await fetch(`/api/tickets/${ticketId}/messages`, {
       method: 'POST',
@@ -64,7 +70,7 @@ export function TicketProvider({ children }) {
   }
 
   return (
-    <TicketContext.Provider value={{ tickets, loading, loadTicket, addTicket, updateTicket, addMessage }}>
+    <TicketContext.Provider value={{ tickets, loading, loadTicket, addTicket, updateTicket, addMessage, deleteTicket }}>
       {children}
     </TicketContext.Provider>
   );

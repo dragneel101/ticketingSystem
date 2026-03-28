@@ -202,4 +202,21 @@ router.post('/:id/messages', async (req, res) => {
   }
 });
 
+// ── DELETE /api/tickets/:id ───────────────────────────────
+const adminOnly = require('../middleware/adminOnly');
+
+router.delete('/:id', adminOnly, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM tickets WHERE ticket_ref = $1',
+      [req.params.id]
+    );
+    if (rowCount === 0) return res.status(404).json({ error: 'Ticket not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete ticket' });
+  }
+});
+
 module.exports = router;

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTickets } from '../context/TicketContext';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 const SUPPORT_EMAIL = 'support@company.com';
 
@@ -104,8 +105,9 @@ function MessageGroup({ message }) {
 
 /* ── main component ──────────────────────────────────────── */
 export default function TicketDetail({ ticketId }) {
-  const { tickets, loadTicket, updateTicket, addMessage } = useTickets();
+  const { tickets, loadTicket, updateTicket, addMessage, deleteTicket } = useTickets();
   const { addToast } = useToast();
+  const { user } = useAuth();
   const ticket = tickets.find((t) => t.id === ticketId);
 
   const [replyText, setReplyText] = useState('');
@@ -143,6 +145,16 @@ export default function TicketDetail({ ticketId }) {
       addToast(`Priority changed to ${newPriority}`, 'info');
     } catch {
       addToast('Failed to update priority', 'error');
+    }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm(`Delete ticket ${ticketId}? This cannot be undone.`)) return;
+    try {
+      await deleteTicket(ticketId);
+      addToast(`Ticket ${ticketId} deleted`, 'info');
+    } catch {
+      addToast('Failed to delete ticket', 'error');
     }
   }
 
@@ -203,6 +215,14 @@ export default function TicketDetail({ ticketId }) {
               options={PRIORITY_OPTIONS}
               onChange={handlePriorityChange}
             />
+            {user?.role === 'admin' && (
+              <button className="btn-delete-ticket" onClick={handleDelete} aria-label="Delete ticket">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3.5 3.5l.75 8h5.5l.75-8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Delete
+              </button>
+            )}
           </div>
         </div>
 

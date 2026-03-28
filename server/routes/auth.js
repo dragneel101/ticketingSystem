@@ -79,7 +79,7 @@ router.post('/logout', (req, res) => {
 // The frontend calls this on startup to rehydrate auth state.
 router.get('/me', async (req, res) => {
   if (!req.session.userId) {
-    return res.status(401).json({ error: 'Not authenticated' });
+    return res.json({ user: null });
   }
 
   try {
@@ -91,10 +91,10 @@ router.get('/me', async (req, res) => {
     if (rows.length === 0) {
       // User was deleted while they had an active session
       req.session.destroy(() => {});
-      return res.status(401).json({ error: 'Not authenticated' });
+      return res.json({ user: null });
     }
 
-    res.json(rows[0]);
+    res.json({ user: rows[0] });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch user' });

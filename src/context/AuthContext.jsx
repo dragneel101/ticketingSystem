@@ -16,8 +16,8 @@ export function AuthProvider({ children }) {
   // The browser automatically sends the session cookie with this request.
   useEffect(() => {
     fetch('/api/auth/me')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setUser(data))
+      .then((r) => r.json())
+      .then((data) => setUser(data.user ?? null))
       .catch(() => setUser(null))
       .finally(() => setAuthLoading(false));
   }, []);

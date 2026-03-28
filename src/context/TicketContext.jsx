@@ -57,7 +57,9 @@ export function TicketProvider({ children }) {
     const res = await fetch(`/api/tickets/${ticketId}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: message.from, text: message.text }),
+      // Forward the optional `type` field so callers can post 'note' messages.
+      // If message.type is undefined the server defaults to 'message'.
+      body: JSON.stringify({ from: message.from, text: message.text, type: message.type }),
     });
     if (!res.ok) throw new Error('Failed to send message');
     const msg = await res.json();

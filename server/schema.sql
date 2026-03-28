@@ -97,3 +97,17 @@ ALTER TABLE tickets
   ADD COLUMN IF NOT EXISTS assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS idx_tickets_assigned_to ON tickets(assigned_to);
+
+-- ── Migration: customer contact fields + resolution ───────────
+-- phone and company are nullable — existing tickets simply show "—" in the UI.
+-- resolution stores the agent's close-out summary text (also nullable).
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS phone      VARCHAR(50);
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS company    VARCHAR(255);
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS resolution TEXT;
+
+-- ── Migration: message type discriminator ─────────────────────
+-- 'message' = customer-facing communication (existing rows, default)
+-- 'note'    = internal agent-only note (new)
+-- DEFAULT 'message' means this migration is safe against existing rows:
+-- every row that was inserted without a type is treated as a regular message.
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS type VARCHAR(20) NOT NULL DEFAULT 'message';

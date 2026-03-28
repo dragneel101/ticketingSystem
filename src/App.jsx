@@ -4,6 +4,7 @@ import { TicketProvider } from './context/TicketContext';
 import { ToastProvider, useToast } from './context/ToastContext';
 import TicketList from './components/TicketList';
 import TicketDetail, { EmptyState } from './components/TicketDetail';
+import TicketPage from './components/TicketPage';
 import NewTicketForm from './components/NewTicketForm';
 import LoginForm from './components/LoginForm';
 import UserManagementPage from './components/UserManagementPage';
@@ -11,10 +12,13 @@ import AdminConfigPage from './components/AdminConfigPage';
 import DashboardPage from './components/DashboardPage';
 
 // Top-level views. DASHBOARD is the default landing page after login.
+// TICKET_DETAIL is a full-page takeover that hides the sidebar and uses
+// all available width for the two-column ticket layout.
 // String values keep activeView comparisons readable as the view list grows.
 const VIEWS = {
   DASHBOARD: 'dashboard',
   TICKETS: 'tickets',
+  TICKET_DETAIL: 'ticket_detail',
   USERS: 'users',
   SETTINGS: 'settings',
 };
@@ -32,16 +36,21 @@ function AppShell() {
     addToast('Logged out', 'info');
   }
 
+  // Clicking a ticket navigates to the full-page detail view.
+  // Clicking the same ticket a second time while already in detail view is
+  // handled by the back button — this callback is only called from the list.
   const handleSelectTicket = useCallback((id) => {
-    setSelectedId((prev) => (prev === id ? null : id));
+    setSelectedId(id);
+    setActiveView(VIEWS.TICKET_DETAIL);
   }, []);
 
   const handleNewTicket = useCallback(() => setShowNewTicket(true), []);
   const handleCloseForm = useCallback(() => setShowNewTicket(false), []);
 
-  // Receive the created ticket's ID and select it directly
+  // After a new ticket is created, jump straight to its detail page.
   const handleTicketCreated = useCallback((newId) => {
     setSelectedId(newId);
+    setActiveView(VIEWS.TICKET_DETAIL);
   }, []);
 
   // Switching views preserves selectedId intentionally — navigating away
@@ -51,11 +60,10 @@ function AppShell() {
   }
 
   // Called by DashboardPage's "View" button on a recent ticket row.
-  // Does two state updates atomically from the parent's perspective — React
-  // batches these in a single re-render, so there's no intermediate flash.
+  // Goes directly to the full-page detail view for that ticket.
   const handleViewTicket = useCallback((ticketId) => {
     setSelectedId(ticketId);
-    setActiveView(VIEWS.TICKETS);
+    setActiveView(VIEWS.TICKET_DETAIL);
   }, []);
 
   // Called by DashboardPage's Quick Actions buttons.
@@ -118,6 +126,7 @@ function AppShell() {
         />
       )}
 
+      {/* Ticket list view — sidebar + empty state, no detail panel */}
       {activeView === VIEWS.TICKETS && (
         <div className="app-shell">
           <TicketList
@@ -129,13 +138,30 @@ function AppShell() {
           />
 
           <main className="main-content" role="main" aria-label="Ticket detail">
-            {selectedId ? (
-              <TicketDetail key={selectedId} ticketId={selectedId} />
-            ) : (
-              <EmptyState />
-            )}
+            <EmptyState />
           </main>
 
+          {showNewTicket && (
+            <NewTicketForm
+              onClose={handleCloseForm}
+              onCreated={handleTicketCreated}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Full-page ticket detail — no sidebar, full width for the two-column layout.
+          key={selectedId} remounts TicketPage when a different ticket is selected,
+          which resets local state (active tab, scroll position, draft text) cleanly.
+          overflow: hidden here is intentional — TicketPage manages its own scroll
+          regions internally (sidebar scrolls, tab content scrolls). */}
+      {activeView === VIEWS.TICKET_DETAIL && selectedId && (
+        <div className="main-content">
+          <TicketPage
+            key={selectedId}
+            ticketId={selectedId}
+            onBack={() => setActiveView(VIEWS.TICKETS)}
+          />
           {showNewTicket && (
             <NewTicketForm
               onClose={handleCloseForm}

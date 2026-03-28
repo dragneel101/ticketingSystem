@@ -2537,3 +2537,499 @@ body {
   width: 100%;
   flex: 1 1 100%;
 }
+
+/* ============================================================
+   TICKET PAGE (full-width detail view)
+   ============================================================ */
+
+/*
+  Layout overview:
+    .tp-page          — full-height flex column
+      .tp-header      — fixed top bar with breadcrumb + controls
+      .tp-body        — flex row that fills remaining height
+        .tp-sidebar   — ~280px fixed left column (customer + metadata)
+        .tp-main      — flexible right column (tab bar + tab panel)
+*/
+
+.tp-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--gray-50);
+  animation: fadeUp 260ms var(--ease-out) both;
+}
+
+/* ── Header ──────────────────────────────────────────────── */
+.tp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 28px;
+  background: #fff;
+  border-bottom: 1px solid var(--gray-200);
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.tp-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Breadcrumb back arrow — feels like a nav link, not a big button */
+.tp-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px 4px 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray-500);
+  background: none;
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: color var(--t-fast) var(--ease),
+              background var(--t-fast) var(--ease);
+  flex-shrink: 0;
+}
+
+.tp-back-btn:hover {
+  color: var(--brand);
+  background: var(--brand-light);
+}
+
+.tp-header-divider {
+  color: var(--gray-300);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.tp-header-ref {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.tp-header-subject {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-800);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tp-header-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/* ── Body ─────────────────────────────────────────────────── */
+.tp-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+
+/* ── Left sidebar (customer + metadata) ──────────────────── */
+.tp-sidebar {
+  width: 280px;
+  min-width: 280px;
+  overflow-y: auto;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-right: 1px solid var(--gray-200);
+  background: #fff;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gray-200) transparent;
+}
+
+.tp-sidebar::-webkit-scrollbar { width: 4px; }
+.tp-sidebar::-webkit-scrollbar-thumb {
+  background: var(--gray-200);
+  border-radius: 4px;
+}
+
+/* Card shared by customer card and metadata card */
+.tp-card {
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tp-card-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--gray-400);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+/* Each label+value row inside a card */
+.tp-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.tp-info-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gray-400);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
+}
+
+.tp-info-value {
+  font-size: 12.5px;
+  color: var(--gray-700);
+  text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tp-info-link {
+  color: var(--brand);
+  text-decoration: none;
+}
+
+.tp-info-link:hover {
+  text-decoration: underline;
+}
+
+/* Muted placeholder shown when a nullable field has no value */
+.tp-info-empty {
+  color: var(--gray-300);
+  font-style: italic;
+}
+
+.tp-info-id {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Right main area ──────────────────────────────────────── */
+.tp-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ── Tab bar ──────────────────────────────────────────────── */
+.tp-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 24px;
+  background: #fff;
+  border-bottom: 1px solid var(--gray-200);
+  flex-shrink: 0;
+}
+
+.tp-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px 11px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray-500);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: color var(--t-fast) var(--ease),
+              border-color var(--t-fast) var(--ease);
+  white-space: nowrap;
+}
+
+.tp-tab:hover {
+  color: var(--gray-800);
+}
+
+/* Active tab gets the brand underline — a standard tab indicator */
+.tp-tab--active {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+  font-weight: 600;
+}
+
+/* Small count badge on the Internal Notes tab */
+.tp-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: var(--p-medium-bg);
+  color: var(--p-medium-text);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* ── Tab panel ────────────────────────────────────────────── */
+.tp-tabpanel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Common wrapper for all tab content — ensures consistent flex layout */
+.tp-tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Communication tab: thread scrolls, reply box is pinned ── */
+/* tp-thread overrides .message-thread only for the padding/flex context */
+.tp-thread {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+}
+
+.tp-thread-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 8px;
+  color: var(--gray-400);
+  font-size: 13px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+/* ── Internal Notes tab ───────────────────────────────────── */
+
+/* Note thread — same scroll behaviour as message thread */
+.tp-notes-thread {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gray-200) transparent;
+  background: #fffdf5;  /* very faint amber wash so agents know they're in notes mode */
+}
+
+.tp-notes-thread::-webkit-scrollbar { width: 4px; }
+.tp-notes-thread::-webkit-scrollbar-thumb {
+  background: var(--gray-200);
+  border-radius: 4px;
+}
+
+/* Note bubble — styled like a left-aligned message but with amber tint */
+.note-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 78%;
+  align-self: flex-start;
+  align-items: flex-start;
+  animation: messageIn 200ms var(--ease-out) both;
+}
+
+.note-sender {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--gray-400);
+  padding: 0 4px;
+}
+
+/* Amber background distinguishes notes from customer messages at a glance */
+.note-bubble {
+  padding: 10px 14px;
+  border-radius: var(--r-lg);
+  border-bottom-left-radius: var(--r-sm);
+  font-size: 13.5px;
+  line-height: 1.55;
+  background: var(--p-medium-bg);
+  color: var(--gray-800);
+  border: 1px solid rgba(74, 128, 245, 0.2);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Note composer — pinned to the bottom of the notes tab */
+.tp-note-composer {
+  padding: 16px 28px 20px;
+  border-top: 1px solid #f0e8c0;
+  background: #fffdf5;
+  flex-shrink: 0;
+}
+
+.tp-note-composer-inner {
+  border: 1.5px solid #e8d87a;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  transition: border-color var(--t-fast) var(--ease),
+              box-shadow var(--t-fast) var(--ease);
+}
+
+.tp-note-composer-inner:focus-within {
+  border-color: #c8aa30;
+  box-shadow: 0 0 0 3px rgba(240, 165, 0, 0.12);
+}
+
+.tp-note-textarea {
+  width: 100%;
+  padding: 14px 16px 10px;
+  border: none;
+  outline: none;
+  font-size: 13.5px;
+  font-family: var(--sans);
+  color: var(--gray-700);
+  resize: none;
+  min-height: 80px;
+  max-height: 200px;
+  background: transparent;
+  line-height: 1.55;
+}
+
+.tp-note-textarea::placeholder {
+  color: var(--gray-400);
+}
+
+/* Post Note button — amber coloured to match the notes palette */
+.btn-note-post {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #f0a500;
+  color: #fff;
+  border: none;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease),
+              transform var(--t-fast) var(--ease),
+              box-shadow var(--t-fast) var(--ease);
+  box-shadow: 0 2px 8px rgba(240, 165, 0, 0.35);
+}
+
+.btn-note-post:hover:not(:disabled) {
+  background: #d48f00;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(240, 165, 0, 0.45);
+}
+
+.btn-note-post:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-note-post:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ── Resolution tab ───────────────────────────────────────── */
+.tp-resolution-content {
+  overflow-y: auto;
+}
+
+.tp-resolution-body {
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 700px;
+}
+
+.tp-resolution-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray-700);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tp-resolution-hint {
+  font-size: 12.5px;
+  color: var(--gray-400);
+  line-height: 1.6;
+}
+
+.tp-resolution-textarea {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--r-lg);
+  font-size: 13.5px;
+  font-family: var(--sans);
+  color: var(--gray-800);
+  resize: vertical;
+  line-height: 1.6;
+  background: #fff;
+  transition: border-color var(--t-fast) var(--ease),
+              box-shadow var(--t-fast) var(--ease);
+}
+
+.tp-resolution-textarea::placeholder {
+  color: var(--gray-300);
+}
+
+.tp-resolution-textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-light);
+}
+
+.tp-resolution-textarea:disabled {
+  opacity: 0.65;
+}
+
+.tp-resolution-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 4px;
+}

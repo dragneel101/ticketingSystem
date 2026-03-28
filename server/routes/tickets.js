@@ -22,18 +22,25 @@ function formatTicket(row, messages = []) {
     id: row.ticket_ref,
     subject: row.subject,
     customerEmail: row.customer_email,
+    // Nullable contact fields — null when not yet set
+    phone: row.phone ?? null,
+    company: row.company ?? null,
     category: row.category,
     priority: row.priority,
     status: row.status,
     createdAt: row.created_at,
+    resolution: row.resolution ?? null,
     // Assignment: null when unassigned, populated by JOIN when assigned
     assignedTo: row.assigned_to ?? null,
     assigneeName: row.assignee_name ?? null,
     assigneeEmail: row.assignee_email ?? null,
+    // Each message includes its type ('message' | 'note') so the frontend
+    // can filter to the correct tab without a second request.
     messages: messages.map((m) => ({
       from: m.from_addr,
       text: m.body,
       time: m.created_at,
+      type: m.type ?? 'message',
     })),
   };
 }
@@ -109,7 +116,7 @@ router.get('/:id', async (req, res) => {
 
 // ── POST /api/tickets ─────────────────────────────────────────
 router.post('/', async (req, res) => {
-  const { subject, customerEmail, category, priority, initialMessage } = req.body;
+  const { subject, customerEmail, category, priority, phone, company, initialMessage } = req.body;
 
   if (!subject?.trim() || !customerEmail?.trim()) {
     return res.status(400).json({ error: 'subject and customerEmail are required' });
@@ -121,8 +128,8 @@ router.post('/', async (req, res) => {
 
     const ticketRef = await nextTicketRef(client);
     const { rows } = await client.query(
-      `INSERT INTO tickets (ticket_ref, subject, customer_email, category, priority)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO tickets (ticket_ref, subject, customer_email, category, priority, phone, company)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [
         ticketRef,
@@ -130,6 +137,8 @@ router.post('/', async (req, res) => {
         customerEmail.trim().toLowerCase(),
         category || 'General',
         priority || 'medium',
+        phone?.trim() || null,
+        company?.trim() || null,
       ]
     );
     const ticket = rows[0];
@@ -160,7 +169,9 @@ router.post('/', async (req, res) => {
 // Accepts: { status, priority, assigned_to } — updates only the fields provided.
 // assigned_to must be an integer user ID (agent or admin role), or null to unassign.
 router.patch('/:id', async (req, res) => {
-  const allowed = ['status', 'priority'];
+  // resolution is a free-text field — no special validation needed beyond
+  // accepting null (clear it) or a string (set it).
+  const allowed = ['status', 'priority', 'resolution'];
   const updates = {};
 
   for (const key of allowed) {
@@ -245,11 +256,15 @@ router.patch('/:id', async (req, res) => {
 
 // ── POST /api/tickets/:id/messages ───────────────────────────
 router.post('/:id/messages', async (req, res) => {
-  const { from, text } = req.body;
+  const { from, text, type } = req.body;
 
   if (!from?.trim() || !text?.trim()) {
     return res.status(400).json({ error: 'from and text are required' });
   }
+
+  // Whitelist the two valid types. Default to 'message' if not provided
+  // so existing callers that don't send a type still work correctly.
+  const msgType = type === 'note' ? 'note' : 'message';
 
   try {
     const { rows: ticketRows } = await pool.query(
@@ -261,14 +276,19 @@ router.post('/:id/messages', async (req, res) => {
     }
 
     const { rows } = await pool.query(
-      `INSERT INTO messages (ticket_id, from_addr, body)
-       VALUES ($1, $2, $3)
+      `INSERT INTO messages (ticket_id, from_addr, body, type)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [ticketRows[0].id, from.trim(), text.trim()]
+      [ticketRows[0].id, from.trim(), text.trim(), msgType]
     );
 
     const msg = rows[0];
-    res.status(201).json({ from: msg.from_addr, text: msg.body, time: msg.created_at });
+    res.status(201).json({
+      from: msg.from_addr,
+      text: msg.body,
+      time: msg.created_at,
+      type: msg.type,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to add message' });

@@ -24,7 +24,7 @@ app.use(
   session({
     store: new PgSession({
       pool,                        // reuse the existing connection pool
-      tableName: 'session',        // table name in Postgres
+      tableName: 'sessions',       // table name in Postgres
       createTableIfMissing: true,  // auto-create the sessions table on first run
     }),
     secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',

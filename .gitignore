@@ -6,7 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-CLAUDE.md
+
 node_modules
 dist
 .env
@@ -24,3 +24,6 @@ dist-ssr
 *.sln
 *.sw?
 schema.sql
+SKILL.md
+.claude
+CLAUDE.md

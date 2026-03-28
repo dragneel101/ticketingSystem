@@ -7,19 +7,28 @@ CREATE TABLE IF NOT EXISTS users (
   email         TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   name          TEXT NOT NULL DEFAULT '',
+  role          TEXT NOT NULL DEFAULT 'agent',
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ── Sessions (managed by connect-pg-simple) ──────────────────
--- connect-pg-simple will create this table automatically on startup
--- when the `createTableIfMissing` option is set to true (see server/index.js).
+CREATE TABLE IF NOT EXISTS sessions (
+  sid    TEXT PRIMARY KEY,
+  sess   JSONB NOT NULL,
+  expire TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_expire ON sessions(expire);
 
--- ── Seed user (dev only) ──────────────────────────────────────
--- Email: admin@company.com  |  Password: password123
--- Generate a new hash with: node -e "require('bcrypt').hash('yourpass',12).then(console.log)"
--- then UPDATE users SET password_hash = '...' WHERE email = 'admin@company.com';
-INSERT INTO users (email, password_hash, name)
-VALUES ('admin@company.com', '$2b$12$3mlWRa9mVug3nCkbmsNbQ.OjyYG6cQOlmtCMT6DGeKwDu24tNyXf.', 'Admin')
+-- ── Seed users (dev only) ─────────────────────────────────────
+-- admin@example.com  |  Password: changeme  (role: admin)
+-- Generated with: node -e "const b=require('bcryptjs'); b.hash('changeme',10).then(console.log)"
+INSERT INTO users (email, password_hash, name, role)
+VALUES ('admin@example.com', '$2b$10$azgKm0JSFNyGatA7OPf9euhcMtBtwo1SFDJO39rhtYm19FC8OQhWu', 'Admin', 'admin')
+ON CONFLICT (email) DO NOTHING;
+
+-- admin@company.com  |  Password: password123  (legacy dev seed)
+INSERT INTO users (email, password_hash, name, role)
+VALUES ('admin@company.com', '$2b$12$3mlWRa9mVug3nCkbmsNbQ.OjyYG6cQOlmtCMT6DGeKwDu24tNyXf.', 'Admin', 'admin')
 ON CONFLICT (email) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS tickets (

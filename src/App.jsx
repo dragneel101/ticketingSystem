@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { TicketProvider } from './context/TicketContext';
 import { ToastProvider, useToast } from './context/ToastContext';
 import TicketList from './components/TicketList';
-import TicketDetail, { EmptyState } from './components/TicketDetail';
 import TicketPage from './components/TicketPage';
 import NewTicketForm from './components/NewTicketForm';
 import LoginForm from './components/LoginForm';
@@ -126,20 +125,14 @@ function AppShell() {
         />
       )}
 
-      {/* Ticket list view — sidebar + empty state, no detail panel */}
+      {/* Ticket list view — full-page centered layout */}
       {activeView === VIEWS.TICKETS && (
-        <div className="app-shell">
+        <main className="tl-main" role="main" aria-label="Tickets">
           <TicketList
             selectedId={selectedId}
             onSelect={handleSelectTicket}
             onNewTicket={handleNewTicket}
-            currentUser={user}
-            onLogout={handleLogout}
           />
-
-          <main className="main-content" role="main" aria-label="Ticket detail">
-            <EmptyState />
-          </main>
 
           {showNewTicket && (
             <NewTicketForm
@@ -147,7 +140,7 @@ function AppShell() {
               onCreated={handleTicketCreated}
             />
           )}
-        </div>
+        </main>
       )}
 
       {/* Full-page ticket detail — no sidebar, full width for the two-column layout.

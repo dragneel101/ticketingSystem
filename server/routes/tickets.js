@@ -48,9 +48,13 @@ function formatTicket(row, messages = [], events = []) {
 }
 
 // ── GET /api/tickets ──────────────────────────────────────────
-// Optional query params: ?status=open&priority=high
+// Optional query params: ?status=open&priority=high&page=1&limit=25
 router.get('/', async (req, res) => {
   try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 25));
+    const offset = (page - 1) * limit;
+
     const conditions = [];
     const values = [];
 
@@ -63,22 +67,32 @@ router.get('/', async (req, res) => {
       conditions.push(`t.priority = $${values.length}`);
     }
 
-    // Prefix WHERE conditions with "t." now that we're joining tables.
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const { rows } = await pool.query(
-      // LEFT JOIN so tickets without an assignee are still returned.
-      // u.name and u.email are aliased to avoid colliding with ticket columns.
-      `SELECT t.*,
-              u.name  AS assignee_name,
-              u.email AS assignee_email
-       FROM tickets t
-       LEFT JOIN users u ON u.id = t.assigned_to
-       ${where}
-       ORDER BY t.created_at DESC`,
-      values
-    );
 
-    res.json(rows.map((r) => formatTicket(r)));
+    const [{ rows: countRows }, { rows }] = await Promise.all([
+      pool.query(`SELECT COUNT(*) FROM tickets t ${where}`, values),
+      pool.query(
+        `SELECT t.*,
+                u.name  AS assignee_name,
+                u.email AS assignee_email
+         FROM tickets t
+         LEFT JOIN users u ON u.id = t.assigned_to
+         ${where}
+         ORDER BY t.created_at DESC
+         LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
+        [...values, limit, offset]
+      ),
+    ]);
+
+    const total = parseInt(countRows[0].count, 10);
+
+    res.json({
+      tickets: rows.map((r) => formatTicket(r)),
+      total,
+      page,
+      limit,
+      hasMore: offset + rows.length < total,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch tickets' });

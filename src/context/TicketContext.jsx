@@ -5,12 +5,16 @@ const TicketContext = createContext(null);
 export function TicketProvider({ children }) {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [meta, setMeta] = useState({ total: 0, page: 1, hasMore: false });
 
-  // Load all tickets on mount
+  // Load first page on mount
   useEffect(() => {
-    fetch('/api/tickets')
+    fetch('/api/tickets?page=1&limit=25')
       .then((r) => r.json())
-      .then(setTickets)
+      .then((data) => {
+        setTickets(data.tickets);
+        setMeta({ total: data.total, page: data.page, hasMore: data.hasMore });
+      })
       .catch((err) => console.error('Failed to load tickets', err))
       .finally(() => setLoading(false));
   }, []);
@@ -33,6 +37,7 @@ export function TicketProvider({ children }) {
     if (!res.ok) throw new Error('Failed to create ticket');
     const created = await res.json();
     setTickets((prev) => [created, ...prev]);
+    setMeta((m) => ({ ...m, total: m.total + 1 }));
     return created;
   }
 
@@ -47,10 +52,6 @@ export function TicketProvider({ children }) {
     setTickets((prev) =>
       prev.map((t) => {
         if (t.id !== id) return t;
-        // PATCH response doesn't include events (no round-trip to ticket_events).
-        // Preserve the already-loaded events array from the previous state so
-        // agents see history that was fetched by loadTicket without a full reload.
-        // loadTicket (called on mount) will always have the authoritative list.
         return { ...t, ...updated, events: t.events ?? [] };
       })
     );
@@ -59,15 +60,14 @@ export function TicketProvider({ children }) {
   async function deleteTicket(id) {
     const res = await fetch(`/api/tickets/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error((await res.json()).error);
-    setTickets(prev => prev.filter(t => t.id !== id));
+    setTickets((prev) => prev.filter((t) => t.id !== id));
+    setMeta((m) => ({ ...m, total: Math.max(0, m.total - 1) }));
   }
 
   async function addMessage(ticketId, message) {
     const res = await fetch(`/api/tickets/${ticketId}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      // Forward the optional `type` field so callers can post 'note' messages.
-      // If message.type is undefined the server defaults to 'message'.
       body: JSON.stringify({ from: message.from, text: message.text, type: message.type }),
     });
     if (!res.ok) throw new Error('Failed to send message');
@@ -80,8 +80,19 @@ export function TicketProvider({ children }) {
     return msg;
   }
 
+  async function loadMoreTickets() {
+    const nextPage = meta.page + 1;
+    const res = await fetch(`/api/tickets?page=${nextPage}&limit=25`);
+    if (!res.ok) throw new Error('Failed to load more tickets');
+    const data = await res.json();
+    setTickets((prev) => [...prev, ...data.tickets]);
+    setMeta({ total: data.total, page: data.page, hasMore: data.hasMore });
+  }
+
   return (
-    <TicketContext.Provider value={{ tickets, loading, loadTicket, addTicket, updateTicket, addMessage, deleteTicket }}>
+    <TicketContext.Provider
+      value={{ tickets, loading, meta, loadTicket, addTicket, updateTicket, addMessage, deleteTicket, loadMoreTickets }}
+    >
       {children}
     </TicketContext.Provider>
   );

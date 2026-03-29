@@ -1285,6 +1285,34 @@ body {
   border-color: var(--brand-border);
 }
 
+.btn-load-more {
+  display: block;
+  width: calc(100% - 24px);
+  margin: 8px 12px 12px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid var(--sidebar-border);
+  border-radius: var(--r-md);
+  color: var(--sidebar-text);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+  text-align: center;
+}
+
+.btn-load-more:hover:not(:disabled) {
+  background: var(--sidebar-hover);
+  color: #e2e8f0;
+  border-color: var(--sidebar-border-2);
+}
+
+.btn-load-more:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* ============================================================
    APP HEADER
    ============================================================ */

@@ -79,9 +79,10 @@ function SidebarStats({ tickets }) {
 
 /* ── main component ──────────────────────────────────────── */
 export default function TicketList({ selectedId, onSelect, onNewTicket, currentUser, onLogout }) {
-  const { tickets } = useTickets();
+  const { tickets, meta, loadMoreTickets } = useTickets();
   const { user } = useAuth();
   const [filterStatus, setFilterStatus] = useState('all');
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filterPriority, setFilterPriority] = useState('all');
   const [filterAssignee, setFilterAssignee] = useState('all');
   const [agents, setAgents] = useState([]);
@@ -145,6 +146,15 @@ export default function TicketList({ selectedId, onSelect, onNewTicket, currentU
     const card = listRef.current?.querySelector(`#ticket-${nextId}`);
     card?.focus();
   }, [filtered, selectedId, onSelect]);
+
+  async function handleLoadMore() {
+    setLoadingMore(true);
+    try {
+      await loadMoreTickets();
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   return (
     <aside className="sidebar" aria-label="Ticket list">
@@ -296,6 +306,16 @@ export default function TicketList({ selectedId, onSelect, onNewTicket, currentU
           ))
         )}
       </div>
+
+      {meta.hasMore && (
+        <button
+          className="btn-load-more"
+          onClick={handleLoadMore}
+          disabled={loadingMore}
+        >
+          {loadingMore ? 'Loading…' : `Load more · ${meta.total - tickets.length} remaining`}
+        </button>
+      )}
 
       {/* User footer with logout — pinned to the bottom of the sidebar */}
       {currentUser && (

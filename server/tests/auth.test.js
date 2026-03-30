@@ -343,3 +343,355 @@ describe('PATCH /api/settings', () => {
     expect(res.status).toBe(401);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GET /api/auth/agents
+// ═══════════════════════════════════════════════════════════════════════════
+describe('GET /api/auth/agents', () => {
+  test('authenticated user receives array of agents and admins only', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const res = await agent.get('/api/auth/agents');
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    // Every entry must be agent or admin — no other roles
+    expect(res.body.every((u) => ['agent', 'admin'].includes(u.role))).toBe(true);
+  });
+
+  test('response shape includes id, name, email, role — no password_hash or created_at', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const res = await agent.get('/api/auth/agents');
+
+    expect(res.status).toBe(200);
+    if (res.body.length > 0) {
+      const first = res.body[0];
+      expect(first).toHaveProperty('id');
+      expect(first).toHaveProperty('name');
+      expect(first).toHaveProperty('email');
+      expect(first).toHaveProperty('role');
+      expect(first.password_hash).toBeUndefined();
+      expect(first.created_at).toBeUndefined();
+    }
+  });
+
+  test('both test fixtures appear in the results', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const res = await agent.get('/api/auth/agents');
+
+    expect(res.status).toBe(200);
+    const emails = res.body.map((u) => u.email);
+    expect(emails).toContain(TEST_ADMIN.email);
+    expect(emails).toContain(TEST_AGENT.email);
+  });
+
+  test('unauthenticated — 401', async () => {
+    const res = await request(app).get('/api/auth/agents');
+    expect(res.status).toBe(401);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PATCH /api/auth/users/:id
+// ═══════════════════════════════════════════════════════════════════════════
+describe('PATCH /api/auth/users/:id', () => {
+  const createdEmails = [];
+
+  afterEach(async () => {
+    if (createdEmails.length) {
+      await pool.query('DELETE FROM users WHERE email = ANY($1)', [createdEmails]);
+      createdEmails.length = 0;
+    }
+  });
+
+  // Creates a throwaway user so each test has an isolated target to modify.
+  async function createTarget(adminAgent, overrides = {}) {
+    const data = {
+      email: `patch-target-${Date.now()}@example.com`,
+      name: 'Patch Target',
+      password: 'patchpassword99',
+      role: 'agent',
+      ...overrides,
+    };
+    createdEmails.push(data.email);
+    if (overrides.email) createdEmails.push(overrides.email);
+    const res = await adminAgent.post('/api/auth/users').send(data).expect(201);
+    return res.body;
+  }
+
+  test('admin can update name', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const user = await createTarget(admin);
+
+    const res = await admin.patch(`/api/auth/users/${user.id}`).send({ name: 'Updated Name' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Updated Name');
+  });
+
+  test('admin can update email', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const user = await createTarget(admin);
+    const newEmail = `updated-email-${Date.now()}@example.com`;
+    createdEmails.push(newEmail);
+
+    const res = await admin.patch(`/api/auth/users/${user.id}`).send({ email: newEmail });
+
+    expect(res.status).toBe(200);
+    expect(res.body.email).toBe(newEmail.toLowerCase());
+  });
+
+  test('admin can update the role of another user', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const user = await createTarget(admin, { role: 'agent' });
+
+    const res = await admin.patch(`/api/auth/users/${user.id}`).send({ role: 'admin' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.role).toBe('admin');
+  });
+
+  test('admin cannot change their own role — 400', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+
+    const res = await admin.patch(`/api/auth/users/${adminId}`).send({ role: 'agent' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/cannot change your own role/i);
+  });
+
+  test('invalid email format — 400', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const user = await createTarget(admin);
+
+    const res = await admin.patch(`/api/auth/users/${user.id}`).send({ email: 'not-an-email' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/invalid email/i);
+  });
+
+  test('invalid role value — 400', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const user = await createTarget(admin);
+
+    const res = await admin.patch(`/api/auth/users/${user.id}`).send({ role: 'superuser' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/role must be/i);
+  });
+
+  test('no fields provided — 400', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const user = await createTarget(admin);
+
+    const res = await admin.patch(`/api/auth/users/${user.id}`).send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/no fields/i);
+  });
+
+  test('duplicate email conflicts with an existing user — 409', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const user = await createTarget(admin);
+
+    const res = await admin
+      .patch(`/api/auth/users/${user.id}`)
+      .send({ email: TEST_AGENT.email });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/email already in use/i);
+  });
+
+  test('non-existent user — 404', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const res = await admin.patch('/api/auth/users/999999').send({ name: 'Ghost' });
+
+    expect(res.status).toBe(404);
+  });
+
+  test('non-admin — 403', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const res = await agent.patch(`/api/auth/users/${agentId}`).send({ name: 'Self Update' });
+
+    expect(res.status).toBe(403);
+  });
+
+  test('unauthenticated — 401', async () => {
+    const res = await request(app)
+      .patch(`/api/auth/users/${agentId}`)
+      .send({ name: 'Anon' });
+
+    expect(res.status).toBe(401);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DELETE /api/auth/users/:id
+// ═══════════════════════════════════════════════════════════════════════════
+describe('DELETE /api/auth/users/:id', () => {
+  // No afterEach cleanup needed — the tests that succeed actually delete the user,
+  // so there's nothing left to clean up. Tests that expect 4xx don't create rows.
+  async function createDeleteTarget(adminAgent) {
+    const data = {
+      email: `delete-target-${Date.now()}@example.com`,
+      name: 'Delete Target',
+      password: 'deletepassword99',
+      role: 'agent',
+    };
+    const res = await adminAgent.post('/api/auth/users').send(data).expect(201);
+    return res.body;
+  }
+
+  test('admin can delete another user — 204 with empty body', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const user = await createDeleteTarget(admin);
+
+    const res = await admin.delete(`/api/auth/users/${user.id}`);
+
+    expect(res.status).toBe(204);
+
+    // Confirm the row is gone from the DB — the 204 alone could be lying
+    const { rows } = await pool.query('SELECT id FROM users WHERE id = $1', [user.id]);
+    expect(rows).toHaveLength(0);
+  });
+
+  test('admin cannot delete their own account — 400', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const res = await admin.delete(`/api/auth/users/${adminId}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/cannot delete your own account/i);
+  });
+
+  test('non-existent user — 404', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const res = await admin.delete('/api/auth/users/999999');
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/not found/i);
+  });
+
+  test('non-admin — 403', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const res = await agent.delete(`/api/auth/users/${adminId}`);
+
+    expect(res.status).toBe(403);
+  });
+
+  test('unauthenticated — 401', async () => {
+    const res = await request(app).delete(`/api/auth/users/${agentId}`);
+    expect(res.status).toBe(401);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /api/auth/users/:id/reset-password
+// ═══════════════════════════════════════════════════════════════════════════
+describe('POST /api/auth/users/:id/reset-password', () => {
+  const createdEmails = [];
+
+  afterEach(async () => {
+    if (createdEmails.length) {
+      await pool.query('DELETE FROM users WHERE email = ANY($1)', [createdEmails]);
+      createdEmails.length = 0;
+    }
+  });
+
+  async function createTarget(adminAgent) {
+    const data = {
+      email: `reset-target-${Date.now()}@example.com`,
+      name: 'Reset Target',
+      password: 'originalpassword99',
+      role: 'agent',
+    };
+    createdEmails.push(data.email);
+    const res = await adminAgent.post('/api/auth/users').send(data).expect(201);
+    return { user: res.body, originalPassword: data.password, email: data.email };
+  }
+
+  test('admin can reset a user password — 200', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const { user } = await createTarget(admin);
+
+    const res = await admin
+      .post(`/api/auth/users/${user.id}/reset-password`)
+      .send({ password: 'brandnewpassword99' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toMatch(/password updated/i);
+  });
+
+  test('new password works for login; old password is rejected', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const { user, originalPassword, email } = await createTarget(admin);
+    const newPassword = 'brandnewpassword99';
+
+    await admin
+      .post(`/api/auth/users/${user.id}/reset-password`)
+      .send({ password: newPassword })
+      .expect(200);
+
+    // Fresh agent (no cookie) to test login from scratch
+    const loginOk = await request(app)
+      .post('/api/auth/login')
+      .send({ email, password: newPassword });
+    expect(loginOk.status).toBe(200);
+
+    const loginFail = await request(app)
+      .post('/api/auth/login')
+      .send({ email, password: originalPassword });
+    expect(loginFail.status).toBe(401);
+  });
+
+  test('password below policy minimum — 400', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const { user } = await createTarget(admin);
+
+    const settingsRes = await admin.get('/api/settings');
+    const minLength = settingsRes.body.min_password_length;
+
+    const res = await admin
+      .post(`/api/auth/users/${user.id}/reset-password`)
+      .send({ password: 'x'.repeat(minLength - 1) });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/at least \d+ characters/i);
+  });
+
+  test('missing password field — 400', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const { user } = await createTarget(admin);
+
+    const res = await admin
+      .post(`/api/auth/users/${user.id}/reset-password`)
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/password is required/i);
+  });
+
+  test('non-existent user — 404', async () => {
+    const admin = await loginAs(TEST_ADMIN);
+    const res = await admin
+      .post('/api/auth/users/999999/reset-password')
+      .send({ password: 'validpassword99' });
+
+    expect(res.status).toBe(404);
+  });
+
+  test('non-admin — 403', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const res = await agent
+      .post(`/api/auth/users/${agentId}/reset-password`)
+      .send({ password: 'validpassword99' });
+
+    expect(res.status).toBe(403);
+  });
+
+  test('unauthenticated — 401', async () => {
+    const res = await request(app)
+      .post(`/api/auth/users/${agentId}/reset-password`)
+      .send({ password: 'validpassword99' });
+
+    expect(res.status).toBe(401);
+  });
+});

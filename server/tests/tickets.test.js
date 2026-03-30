@@ -59,6 +59,19 @@ beforeAll(async () => {
 
   adminId = adminRows[0].id;
   agentId = agentRows[0].id;
+
+  // Sync ticket_ref_seq to the current max so nextval() never collides with
+  // existing rows. setval(seq, n) sets last_value=n, so the next nextval()
+  // returns n+1 — safe even when the table is empty (COALESCE → 0 → next = 1).
+  await pool.query(`
+    SELECT setval(
+      'ticket_ref_seq',
+      COALESCE(
+        (SELECT MAX(CAST(REGEXP_REPLACE(ticket_ref, '[^0-9]', '', 'g') AS INT)) FROM tickets),
+        0
+      )
+    )
+  `);
 });
 
 afterEach(async () => {
@@ -115,28 +128,41 @@ async function createTicket(agent, overrides = {}) {
 // GET /api/tickets
 // ═══════════════════════════════════════════════════════════════════════════
 describe('GET /api/tickets', () => {
-  test('happy path — authenticated user receives an array of tickets', async () => {
+  test('happy path — returns paginated envelope with tickets array', async () => {
     const agent = await loginAs(TEST_AGENT);
     const res = await agent.get('/api/tickets');
 
     expect(res.status).toBe(200);
-    expect(Array.isArray(res.body)).toBe(true);
+    // Pagination envelope: { tickets, total, page, limit, hasMore }
+    expect(res.body).toHaveProperty('tickets');
+    expect(res.body).toHaveProperty('total');
+    expect(res.body).toHaveProperty('page');
+    expect(res.body).toHaveProperty('limit');
+    expect(res.body).toHaveProperty('hasMore');
+    expect(Array.isArray(res.body.tickets)).toBe(true);
+    expect(typeof res.body.total).toBe('number');
 
-    // Verify the response shape on the first item if the DB has at least one
-    // ticket (the seed data gives us three, so this is always true in practice).
-    if (res.body.length > 0) {
-      const ticket = res.body[0];
-      // These are the camelCase keys that formatTicket() maps to — not the
-      // raw snake_case column names from the DB.
+    // Verify the ticket shape on the first item (seed data guarantees at least one)
+    if (res.body.tickets.length > 0) {
+      const ticket = res.body.tickets[0];
       expect(ticket).toHaveProperty('id');
       expect(ticket).toHaveProperty('subject');
       expect(ticket).toHaveProperty('customerEmail');
       expect(ticket).toHaveProperty('status');
       expect(ticket).toHaveProperty('priority');
-      // The list endpoint omits messages — that's a deliberate performance
-      // trade-off. The detail endpoint fetches them.
+      // The list endpoint omits messages — that's a deliberate performance trade-off
       expect(ticket.messages).toEqual([]);
     }
+  });
+
+  test('?page= and ?limit= control pagination', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const res = await agent.get('/api/tickets?page=1&limit=2');
+
+    expect(res.status).toBe(200);
+    expect(res.body.page).toBe(1);
+    expect(res.body.limit).toBe(2);
+    expect(res.body.tickets.length).toBeLessThanOrEqual(2);
   });
 
   test('unauthenticated request — 401', async () => {
@@ -162,10 +188,10 @@ describe('GET /api/tickets', () => {
 
     expect(res.status).toBe(200);
     // Every returned ticket must match the requested status — no leakage
-    expect(res.body.every((t) => t.status === 'closed')).toBe(true);
+    expect(res.body.tickets.every((t) => t.status === 'closed')).toBe(true);
 
     // Our known closed ticket must be present in the results
-    const ids = res.body.map((t) => t.id);
+    const ids = res.body.tickets.map((t) => t.id);
     expect(ids).toContain(closed.id);
   });
 
@@ -176,7 +202,7 @@ describe('GET /api/tickets', () => {
     const res = await agent.get('/api/tickets?priority=urgent');
 
     expect(res.status).toBe(200);
-    expect(res.body.every((t) => t.priority === 'urgent')).toBe(true);
+    expect(res.body.tickets.every((t) => t.priority === 'urgent')).toBe(true);
   });
 
   test('?status= and ?priority= together — AND-filters correctly', async () => {
@@ -191,7 +217,7 @@ describe('GET /api/tickets', () => {
     const res = await agent.get('/api/tickets?status=pending&priority=high');
 
     expect(res.status).toBe(200);
-    expect(res.body.every((t) => t.status === 'pending' && t.priority === 'high')).toBe(true);
+    expect(res.body.tickets.every((t) => t.status === 'pending' && t.priority === 'high')).toBe(true);
   });
 });
 
@@ -576,5 +602,239 @@ describe('DELETE /api/tickets/:id', () => {
     );
     // ticket_ref is gone so the JOIN returns nothing — cascade worked
     expect(rows).toHaveLength(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PATCH /api/tickets/:id — assigned_to field
+// ═══════════════════════════════════════════════════════════════════════════
+describe('PATCH /api/tickets/:id — assigned_to', () => {
+  test('assigns a ticket to an agent — response includes assignedTo, assigneeName, assigneeEmail', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Assign me test' });
+
+    const res = await agent
+      .patch(`/api/tickets/${ticket.id}`)
+      .send({ assigned_to: agentId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.assignedTo).toBe(agentId);
+    expect(res.body.assigneeName).toBe(TEST_AGENT.name);
+    expect(res.body.assigneeEmail).toBe(TEST_AGENT.email);
+  });
+
+  test('unassigns a ticket by sending assigned_to: null', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Unassign test' });
+
+    // First assign it, then unassign
+    await agent.patch(`/api/tickets/${ticket.id}`).send({ assigned_to: agentId }).expect(200);
+
+    const res = await agent
+      .patch(`/api/tickets/${ticket.id}`)
+      .send({ assigned_to: null });
+
+    expect(res.status).toBe(200);
+    expect(res.body.assignedTo).toBeNull();
+    expect(res.body.assigneeName).toBeNull();
+    expect(res.body.assigneeEmail).toBeNull();
+  });
+
+  test('non-existent user id — 400', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Assign invalid user test' });
+
+    const res = await agent
+      .patch(`/api/tickets/${ticket.id}`)
+      .send({ assigned_to: 999999 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not found/i);
+  });
+
+  test('non-integer assigned_to — 400', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Assign NaN test' });
+
+    const res = await agent
+      .patch(`/api/tickets/${ticket.id}`)
+      .send({ assigned_to: 'not-a-number' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/integer/i);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GET /api/tickets/:id — events array
+// ═══════════════════════════════════════════════════════════════════════════
+describe('GET /api/tickets/:id — events array', () => {
+  test('fresh ticket has an empty events array', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Events empty test' });
+
+    const res = await agent.get(`/api/tickets/${ticket.id}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.events)).toBe(true);
+    expect(res.body.events).toHaveLength(0);
+  });
+
+  test('events array is populated after a status change', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Events populated test' });
+
+    await agent.patch(`/api/tickets/${ticket.id}`).send({ status: 'pending' }).expect(200);
+
+    const res = await agent.get(`/api/tickets/${ticket.id}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.events).toHaveLength(1);
+    expect(res.body.events[0]).toMatchObject({
+      eventType: 'status_changed',
+      fromValue: 'open',
+      toValue: 'pending',
+    });
+    expect(res.body.events[0].createdAt).toBeTruthy();
+  });
+
+  test('event shape includes all fields the frontend relies on', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Events shape test' });
+
+    await agent.patch(`/api/tickets/${ticket.id}`).send({ priority: 'urgent' }).expect(200);
+
+    const res = await agent.get(`/api/tickets/${ticket.id}`);
+    const event = res.body.events[0];
+
+    expect(event).toHaveProperty('id');
+    expect(event).toHaveProperty('eventType');
+    expect(event).toHaveProperty('fromValue');
+    expect(event).toHaveProperty('toValue');
+    expect(event).toHaveProperty('actorName');
+    expect(event).toHaveProperty('actorEmail');
+    expect(event).toHaveProperty('createdAt');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PATCH /api/tickets/:id — ticket_events insertion (audit trail)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('PATCH /api/tickets/:id — ticket_events (audit trail)', () => {
+  test('status change inserts a status_changed event with correct from/to values', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Audit status test' });
+
+    await agent.patch(`/api/tickets/${ticket.id}`).send({ status: 'resolved' }).expect(200);
+
+    const detail = await agent.get(`/api/tickets/${ticket.id}`).expect(200);
+
+    expect(detail.body.events).toHaveLength(1);
+    expect(detail.body.events[0]).toMatchObject({
+      eventType: 'status_changed',
+      fromValue: 'open',
+      toValue: 'resolved',
+    });
+  });
+
+  test('priority change inserts a priority_changed event', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Audit priority test', priority: 'low' });
+
+    await agent.patch(`/api/tickets/${ticket.id}`).send({ priority: 'high' }).expect(200);
+
+    const detail = await agent.get(`/api/tickets/${ticket.id}`).expect(200);
+
+    expect(detail.body.events).toHaveLength(1);
+    expect(detail.body.events[0]).toMatchObject({
+      eventType: 'priority_changed',
+      fromValue: 'low',
+      toValue: 'high',
+    });
+  });
+
+  test('assigning a ticket inserts an assigned event with toValue = assignee name', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Audit assign test' });
+
+    await agent.patch(`/api/tickets/${ticket.id}`).send({ assigned_to: agentId }).expect(200);
+
+    const detail = await agent.get(`/api/tickets/${ticket.id}`).expect(200);
+
+    expect(detail.body.events).toHaveLength(1);
+    expect(detail.body.events[0]).toMatchObject({
+      eventType: 'assigned',
+      toValue: TEST_AGENT.name,
+    });
+  });
+
+  test('unassigning inserts an unassigned event after the assigned event', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Audit unassign test' });
+
+    await agent.patch(`/api/tickets/${ticket.id}`).send({ assigned_to: agentId }).expect(200);
+    await agent.patch(`/api/tickets/${ticket.id}`).send({ assigned_to: null }).expect(200);
+
+    const detail = await agent.get(`/api/tickets/${ticket.id}`).expect(200);
+
+    expect(detail.body.events).toHaveLength(2);
+    expect(detail.body.events[1]).toMatchObject({ eventType: 'unassigned' });
+  });
+
+  test('setting a resolution inserts a resolution_set event', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Audit resolution test' });
+
+    await agent
+      .patch(`/api/tickets/${ticket.id}`)
+      .send({ resolution: 'Cleared cache and the issue resolved itself.' })
+      .expect(200);
+
+    const detail = await agent.get(`/api/tickets/${ticket.id}`).expect(200);
+
+    expect(detail.body.events).toHaveLength(1);
+    expect(detail.body.events[0].eventType).toBe('resolution_set');
+  });
+
+  test('no-op patch (same value as current) inserts no event', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Audit no-op test' });
+
+    // Patching with the status the ticket already has is a genuine no-op
+    await agent.patch(`/api/tickets/${ticket.id}`).send({ status: 'open' }).expect(200);
+
+    const detail = await agent.get(`/api/tickets/${ticket.id}`).expect(200);
+    expect(detail.body.events).toHaveLength(0);
+  });
+
+  test('actor name and email are snapshot-captured on the event row', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Audit actor test' });
+
+    await agent.patch(`/api/tickets/${ticket.id}`).send({ status: 'closed' }).expect(200);
+
+    const detail = await agent.get(`/api/tickets/${ticket.id}`).expect(200);
+
+    expect(detail.body.events[0]).toMatchObject({
+      actorName: TEST_AGENT.name,
+      actorEmail: TEST_AGENT.email,
+    });
+  });
+
+  test('multiple fields changed in one PATCH inserts one event per changed field', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'Audit multi-field test', priority: 'low' });
+
+    await agent
+      .patch(`/api/tickets/${ticket.id}`)
+      .send({ status: 'pending', priority: 'high' })
+      .expect(200);
+
+    const detail = await agent.get(`/api/tickets/${ticket.id}`).expect(200);
+
+    expect(detail.body.events).toHaveLength(2);
+    const types = detail.body.events.map((e) => e.eventType);
+    expect(types).toContain('status_changed');
+    expect(types).toContain('priority_changed');
   });
 });

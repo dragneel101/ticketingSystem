@@ -3,6 +3,13 @@ import { useTickets } from '../context/TicketContext';
 import { useAuth } from '../context/AuthContext';
 
 /* ── helpers ─────────────────────────────────────────────── */
+const PRIORITY_ORDER = { urgent: 3, high: 2, medium: 1, low: 0 };
+
+function ticketRefNum(id) {
+  const m = id?.match(/\d+$/);
+  return m ? parseInt(m[0], 10) : 0;
+}
+
 function initials(name) {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/);
@@ -77,6 +84,30 @@ function TicketStats({ tickets }) {
   );
 }
 
+/* ── sortable column header button ──────────────────────── */
+function ColHeader({ label, colKey, sortKey, sortDir, onSort }) {
+  const active = sortKey === colKey;
+  return (
+    <button
+      className={`tl-col-btn${active ? ' tl-col-btn--active' : ''}`}
+      onClick={() => onSort(colKey)}
+      aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      {label}
+      <svg className="tl-sort-icon" width="8" height="10" viewBox="0 0 8 10" fill="none" aria-hidden="true">
+        <path
+          d="M4 1L1.5 4h5L4 1z"
+          fill={active && sortDir === 'asc' ? 'currentColor' : 'var(--gray-400)'}
+        />
+        <path
+          d="M4 9L1.5 6h5L4 9z"
+          fill={active && sortDir === 'desc' ? 'currentColor' : 'var(--gray-400)'}
+        />
+      </svg>
+    </button>
+  );
+}
+
 /* ── main component ──────────────────────────────────────── */
 export default function TicketList({ selectedId, onSelect, onNewTicket }) {
   const { tickets, meta, loadMoreTickets } = useTickets();
@@ -84,10 +115,21 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
   const [filterStatus, setFilterStatus] = useState('all');
   const [loadingMore, setLoadingMore] = useState(false);
   const [filterPriority, setFilterPriority] = useState('all');
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
   const [filterAssignee, setFilterAssignee] = useState('all');
   const [agents, setAgents] = useState([]);
   const [search, setSearch] = useState('');
   const listRef = useRef(null);
+
+  function handleSort(key) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
 
   useEffect(() => {
     fetch('/api/auth/agents')
@@ -98,7 +140,7 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return tickets.filter((t) => {
+    const result = tickets.filter((t) => {
       const statusOk = filterStatus === 'all' || t.status === filterStatus;
       const priorityOk = filterPriority === 'all' || t.priority === filterPriority;
       const searchOk = !q ||
@@ -116,7 +158,31 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
 
       return statusOk && priorityOk && searchOk && assigneeOk;
     });
-  }, [tickets, filterStatus, filterPriority, filterAssignee, search, user?.id]);
+
+    if (sortKey) {
+      result.sort((a, b) => {
+        let aVal, bVal;
+        if (sortKey === 'id') {
+          aVal = ticketRefNum(a.id);
+          bVal = ticketRefNum(b.id);
+        } else if (sortKey === 'priority') {
+          aVal = PRIORITY_ORDER[a.priority] ?? 0;
+          bVal = PRIORITY_ORDER[b.priority] ?? 0;
+        } else if (sortKey === 'createdAt') {
+          aVal = new Date(a.createdAt).getTime();
+          bVal = new Date(b.createdAt).getTime();
+        } else {
+          aVal = (a[sortKey] || '').toLowerCase();
+          bVal = (b[sortKey] || '').toLowerCase();
+        }
+        if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [tickets, filterStatus, filterPriority, filterAssignee, search, user?.id, sortKey, sortDir]);
 
   const handleListKeyDown = useCallback((e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -275,13 +341,13 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
 
       {/* ── Column header ── */}
       {filtered.length > 0 && (
-        <div className="tl-col-header" aria-hidden="true">
-          <span className="tl-col-id">Ref</span>
-          <span className="tl-col-subject">Subject</span>
-          <span className="tl-col-customer">Customer</span>
-          <span className="tl-col-assignee">Assignee</span>
-          <span className="tl-col-badges">Priority / Status</span>
-          <span className="tl-col-date">Created</span>
+        <div className="tl-col-header">
+          <ColHeader label="Ref" colKey="id" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+          <ColHeader label="Subject" colKey="subject" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+          <ColHeader label="Customer" colKey="customerName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+          <ColHeader label="Assignee" colKey="assigneeName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+          <ColHeader label="Priority / Status" colKey="priority" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+          <ColHeader label="Created" colKey="createdAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
         </div>
       )}
 

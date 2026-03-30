@@ -3822,6 +3822,44 @@ body {
   margin-bottom: 4px;
 }
 
+/* ── Sortable column header buttons ── */
+.tl-col-btn {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  white-space: nowrap;
+  border-radius: var(--r-xs);
+  padding: 2px 4px;
+  margin: -2px -4px;
+  transition: color var(--t-fast) var(--ease);
+}
+
+.tl-col-btn:hover {
+  color: var(--gray-600);
+}
+
+.tl-col-btn--active {
+  color: var(--brand);
+}
+
+.tl-sort-icon {
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: opacity var(--t-fast) var(--ease);
+}
+
+.tl-col-btn:hover .tl-sort-icon,
+.tl-col-btn--active .tl-sort-icon {
+  opacity: 1;
+}
+
 /* ── List container ── */
 .tl-list {
   display: flex;

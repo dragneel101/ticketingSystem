@@ -736,6 +736,12 @@ export default function TicketPage({ ticketId, onBack }) {
           {/* Customer card */}
           <div className="tp-card">
             <div className="tp-card-title">Customer</div>
+            {ticket.customerName && (
+              <div className="tp-info-row">
+                <span className="tp-info-label">Name</span>
+                <span className="tp-info-value">{ticket.customerName}</span>
+              </div>
+            )}
             <div className="tp-info-row">
               <span className="tp-info-label">Email</span>
               <a href={`mailto:${ticket.customerEmail}`} className="tp-info-value tp-info-link">

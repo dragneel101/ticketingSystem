@@ -174,7 +174,7 @@ function AppShell() {
         </div>
       )}
 
-      {activeView === VIEWS.CUSTOMERS && <CustomersPage />}
+      {activeView === VIEWS.CUSTOMERS && <CustomersPage onSelectTicket={handleSelectTicket} />}
 
       {/* Guard: isAdmin check here prevents direct state mutation from reaching
           these pages even if the nav buttons are hidden for non-admins */}

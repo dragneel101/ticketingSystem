@@ -12,6 +12,94 @@ function formatDate(iso) {
   }).format(new Date(iso));
 }
 
+const STATUS_LABELS = { open: 'Open', pending: 'Pending', resolved: 'Resolved', closed: 'Closed' };
+
+// ── CustomerTicketsModal ──────────────────────────────────
+function CustomerTicketsModal({ customer, onClose, onSelectTicket }) {
+  const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { addToast } = useToast();
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch(`/api/customers/${customer.id}/tickets`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to load tickets');
+        setTickets(data);
+      } catch (err) {
+        addToast(err.message, 'error');
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [customer.id, addToast]);
+
+  function handleBackdropClick(e) {
+    if (e.target === e.currentTarget) onClose();
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={handleBackdropClick} role="dialog" aria-modal="true" aria-label={`Tickets for ${customer.name}`}>
+      <div className="modal-card cust-tickets-modal">
+        <div className="modal-header">
+          <div>
+            <h2 className="modal-title">{customer.name}</h2>
+            <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--gray-400)' }}>{customer.email}</p>
+          </div>
+          <button className="modal-close" onClick={onClose} aria-label="Close">&#x2715;</button>
+        </div>
+        <div className="modal-body cust-tickets-body">
+          {loading ? (
+            <p className="cust-tickets-empty">Loading&hellip;</p>
+          ) : tickets.length === 0 ? (
+            <p className="cust-tickets-empty">No tickets for this customer yet.</p>
+          ) : (
+            <table className="cust-tickets-table">
+              <thead>
+                <tr>
+                  <th>Ref</th>
+                  <th>Subject</th>
+                  <th>Status</th>
+                  <th>Priority</th>
+                  <th>Created</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {tickets.map((t) => (
+                  <tr key={t.ticket_ref}>
+                    <td className="cust-tickets-ref">{t.ticket_ref}</td>
+                    <td className="cust-tickets-subject">{t.subject}</td>
+                    <td>
+                      <span className={`cust-tickets-status cust-tickets-status--${t.status}`}>
+                        {STATUS_LABELS[t.status] ?? t.status}
+                      </span>
+                    </td>
+                    <td className={`cust-tickets-priority cust-tickets-priority--${t.priority}`}>
+                      {t.priority.charAt(0).toUpperCase() + t.priority.slice(1)}
+                    </td>
+                    <td className="cust-tickets-date">{formatDate(t.created_at)}</td>
+                    <td>
+                      <button
+                        className="btn-row-action"
+                        onClick={() => { onSelectTicket(t.ticket_ref); onClose(); }}
+                      >
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── AddCustomerModal ──────────────────────────────────────
 // Inline in the same file — it's tightly coupled to CustomersPage and
 // not reused elsewhere, so a separate file would just add nav overhead.
@@ -254,11 +342,12 @@ function EditCustomerModal({ customer, onClose, onUpdated }) {
 // ── CustomerRow ───────────────────────────────────────────
 // Self-contained row component — owns its delete confirmation state
 // and the edit modal, matching the pattern from UserManagementPage.
-function CustomerRow({ customer, isAdmin, onUpdated, onDeleted }) {
+function CustomerRow({ customer, isAdmin, onUpdated, onDeleted, onSelectTicket }) {
   const { addToast } = useToast();
   const [deleteState, setDeleteState] = useState('idle');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [showTickets, setShowTickets] = useState(false);
 
   async function handleDelete() {
     setDeleteLoading(true);
@@ -315,13 +404,18 @@ function CustomerRow({ customer, isAdmin, onUpdated, onDeleted }) {
             <div className="user-row-actions">
               <button
                 className="btn-row-action"
+                onClick={() => setShowTickets(true)}
+                aria-label={`View tickets for ${customer.name}`}
+              >
+                Tickets
+              </button>
+              <button
+                className="btn-row-action"
                 onClick={() => setShowEdit(true)}
                 aria-label={`Edit ${customer.name}`}
               >
                 Edit
               </button>
-              {/* Delete is admin-only — hidden for agents rather than just disabled,
-                  since agents should never need to think about this action */}
               {isAdmin && (
                 <button
                   className="btn-row-action btn-row-action--danger"
@@ -346,12 +440,20 @@ function CustomerRow({ customer, isAdmin, onUpdated, onDeleted }) {
           }}
         />
       )}
+
+      {showTickets && (
+        <CustomerTicketsModal
+          customer={customer}
+          onClose={() => setShowTickets(false)}
+          onSelectTicket={onSelectTicket}
+        />
+      )}
     </>
   );
 }
 
 // ── CustomersPage ─────────────────────────────────────────
-export default function CustomersPage() {
+export default function CustomersPage({ onSelectTicket }) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const isAdmin = user?.role === 'admin';
@@ -501,6 +603,7 @@ export default function CustomersPage() {
                         isAdmin={isAdmin}
                         onUpdated={handleCustomerUpdated}
                         onDeleted={handleCustomerDeleted}
+                        onSelectTicket={onSelectTicket}
                       />
                     ))
                   )}

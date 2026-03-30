@@ -4227,6 +4227,88 @@ body {
   }
 }
 
+/* ── Customer tickets modal ──────────────────────────────── */
+.modal-card.cust-tickets-modal {
+  width: min(1000px, 94vw);
+  max-width: min(1000px, 94vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.cust-tickets-body {
+  overflow-y: auto;
+  padding: 0;
+}
+
+.cust-tickets-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--gray-400);
+  font-size: 0.875rem;
+}
+
+.cust-tickets-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.cust-tickets-table th {
+  padding: 0.625rem 1rem;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--gray-100);
+  background: var(--gray-50);
+}
+
+.cust-tickets-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--gray-100);
+  color: var(--gray-700);
+}
+
+.cust-tickets-table tr:last-child td { border-bottom: none; }
+
+.cust-tickets-ref {
+  font-family: var(--mono, monospace);
+  font-size: 0.75rem;
+  color: var(--gray-500);
+  white-space: nowrap;
+}
+
+.cust-tickets-subject {
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cust-tickets-date { color: var(--gray-400); white-space: nowrap; }
+
+.cust-tickets-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.cust-tickets-status--open     { background: var(--s-open-bg);     color: var(--s-open-text); }
+.cust-tickets-status--pending  { background: var(--s-pending-bg);  color: var(--s-pending-text); }
+.cust-tickets-status--resolved { background: var(--s-resolved-bg); color: var(--s-resolved-text); }
+.cust-tickets-status--closed   { background: var(--s-closed-bg);   color: var(--s-closed-text); }
+
+.cust-tickets-priority--low    { color: var(--p-low-text); }
+.cust-tickets-priority--medium { color: var(--p-medium-text); }
+.cust-tickets-priority--high   { color: var(--p-high-text); }
+.cust-tickets-priority--urgent { color: var(--p-urgent-text); font-weight: 700; }
+
 /* ── NewTicketForm: customer-found indicator ─────────────── */
 .ntf-customer-found {
   display: inline-flex;

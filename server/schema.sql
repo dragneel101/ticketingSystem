@@ -189,3 +189,27 @@ CREATE TABLE IF NOT EXISTS customers (
   notes      TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ── Migration: companies ──────────────────────────────────
+-- Companies are first-class entities with structured fields.
+-- address, primary_contact, phone are all nullable — some companies
+-- may be created from a ticket before full details are known.
+-- name is UNIQUE so duplicate companies can't be created accidentally.
+CREATE TABLE IF NOT EXISTS companies (
+  id              SERIAL PRIMARY KEY,
+  name            VARCHAR(255) NOT NULL UNIQUE,
+  address         TEXT,
+  primary_contact VARCHAR(255),
+  phone           VARCHAR(50),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- FK links on customers and tickets — nullable so existing rows and
+-- tickets filed without a known company are unaffected.
+-- ON DELETE SET NULL: deleting a company orphans the FK to null but
+-- keeps the company text column for display — no data loss.
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL;
+ALTER TABLE tickets   ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_customers_company_id ON customers(company_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_company_id   ON tickets(company_id);

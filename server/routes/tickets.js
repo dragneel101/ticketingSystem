@@ -143,7 +143,7 @@ router.get('/:id', async (req, res) => {
 
 // ── POST /api/tickets ─────────────────────────────────────────
 router.post('/', async (req, res) => {
-  const { subject, customerEmail, customerName, category, priority, phone, company, initialMessage } = req.body;
+  const { subject, customerEmail, customerName, category, priority, phone, company, companyId, initialMessage } = req.body;
 
   if (!subject?.trim() || !customerEmail?.trim()) {
     return res.status(400).json({ error: 'subject and customerEmail are required' });
@@ -154,8 +154,8 @@ router.post('/', async (req, res) => {
     await client.query('BEGIN');
 
     const { rows } = await client.query(
-      `INSERT INTO tickets (ticket_ref, subject, customer_email, customer_name, category, priority, phone, company)
-       VALUES ('TKT-' || LPAD(nextval('ticket_ref_seq')::TEXT, 3, '0'), $1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO tickets (ticket_ref, subject, customer_email, customer_name, category, priority, phone, company, company_id)
+       VALUES ('TKT-' || LPAD(nextval('ticket_ref_seq')::TEXT, 3, '0'), $1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         subject.trim(),
@@ -165,6 +165,7 @@ router.post('/', async (req, res) => {
         priority || 'medium',
         phone?.trim() || null,
         company?.trim() || null,
+        companyId || null,
       ]
     );
     const ticket = rows[0];

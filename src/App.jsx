@@ -10,6 +10,7 @@ import UserManagementPage from './components/UserManagementPage';
 import AdminConfigPage from './components/AdminConfigPage';
 import DashboardPage from './components/DashboardPage';
 import CustomersPage from './components/CustomersPage';
+import CompaniesPage, { CompanyDetailPage } from './components/CompaniesPage';
 
 // Top-level views. DASHBOARD is the default landing page after login.
 // TICKET_DETAIL is a full-page takeover that hides the sidebar and uses
@@ -20,6 +21,8 @@ const VIEWS = {
   TICKETS: 'tickets',
   TICKET_DETAIL: 'ticket_detail',
   CUSTOMERS: 'customers',
+  COMPANIES: 'companies',
+  COMPANY_DETAIL: 'company_detail',
   USERS: 'users',
   SETTINGS: 'settings',
 };
@@ -32,6 +35,7 @@ function AppShell() {
   const [selectedId, setSelectedId] = useState(null);
   const [showNewTicket, setShowNewTicket] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
+  const [selectedCompany, setSelectedCompany] = useState(null);
 
   async function handleLogout() {
     await logout();
@@ -81,6 +85,11 @@ function AppShell() {
     setActiveView(VIEWS.CUSTOMERS);
   }, []);
 
+  const handleSelectCompany = useCallback((company) => {
+    setSelectedCompany(company);
+    setActiveView(VIEWS.COMPANY_DETAIL);
+  }, []);
+
   const isAdmin = user?.role === 'admin';
 
   return (
@@ -109,6 +118,12 @@ function AppShell() {
               onClick={() => handleNavClick(VIEWS.CUSTOMERS)}
             >
               Customers
+            </button>
+            <button
+              className={`app-header-nav-item${(activeView === VIEWS.COMPANIES || activeView === VIEWS.COMPANY_DETAIL) ? ' app-header-nav-item--active' : ''}`}
+              onClick={() => handleNavClick(VIEWS.COMPANIES)}
+            >
+              Companies
             </button>
             {isAdmin && (
               <button
@@ -187,6 +202,23 @@ function AppShell() {
         <CustomersPage
           onSelectTicket={handleSelectTicket}
           initialSearch={customerSearch}
+        />
+      )}
+
+      {activeView === VIEWS.COMPANIES && (
+        <CompaniesPage
+          onSelectCompany={handleSelectCompany}
+          onSelectTicket={handleSelectTicket}
+        />
+      )}
+
+      {activeView === VIEWS.COMPANY_DETAIL && selectedCompany && (
+        <CompanyDetailPage
+          key={selectedCompany.id}
+          company={selectedCompany}
+          onBack={() => setActiveView(VIEWS.COMPANIES)}
+          onSelectTicket={handleSelectTicket}
+          onViewCustomer={handleViewCustomer}
         />
       )}
 

@@ -4390,3 +4390,141 @@ body {
   color: var(--brand-deep);
   animation: fadeIn var(--t-base) var(--ease-out);
 }
+
+/* ── Companies page ──────────────────────────────────────── */
+
+.co-stat-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.co-stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--gray-100);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-full);
+  font-size: 0.8125rem;
+  color: var(--gray-500);
+  font-weight: 500;
+}
+
+.co-stat-pill--open {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+
+.co-stat-pill-num {
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--gray-700);
+}
+
+.co-stat-pill--open .co-stat-pill-num {
+  color: #c2410c;
+}
+
+.co-detail-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.co-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.co-detail-section-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--gray-700);
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 1.5px solid var(--gray-200);
+}
+
+/* Back button — reused across detail pages */
+.btn-back {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--gray-500);
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--gray-200);
+  background: white;
+  transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+  white-space: nowrap;
+}
+
+.btn-back:hover {
+  color: var(--gray-800);
+  border-color: var(--gray-300);
+  background: var(--gray-50);
+}
+
+/* ── Company autosuggest dropdown (NewTicketForm) ────────── */
+
+.ntf-company-linked {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  font-size: 0.75rem;
+  color: var(--brand);
+  font-weight: 500;
+}
+
+.ntf-suggest-list {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 200;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  background: white;
+  border: 1.5px solid var(--brand-border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.ntf-suggest-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease);
+}
+
+.ntf-suggest-item:hover {
+  background: var(--brand-light);
+}
+
+.ntf-suggest-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.ntf-suggest-meta {
+  font-size: 0.75rem;
+  color: var(--gray-400);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

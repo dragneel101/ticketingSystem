@@ -11,6 +11,7 @@ const INITIAL_FORM = {
   customerName: '',
   phone: '',
   company: '',
+  companyId: null,
   category: 'Account',
   priority: 'medium',
   initialMessage: '',
@@ -153,8 +154,11 @@ export default function NewTicketForm({ onClose, onCreated }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [customerFound, setCustomerFound] = useState(null); // { name, company } | null
+  const [companySuggestions, setCompanySuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const modalRef = useRef(null);
   const lookupTimerRef = useRef(null);
+  const suggestTimerRef = useRef(null);
 
   useEscapeKey(onClose);
   useFocusTrap(modalRef, true);
@@ -200,6 +204,40 @@ export default function NewTicketForm({ onClose, onCreated }) {
     }, 450);
   }, [setField]);
 
+  const handleCompanyChange = useCallback((e) => {
+    const val = e.target.value;
+    setField('company', val);
+    // Reset the linked company_id when the user types manually
+    setForm((prev) => ({ ...prev, companyId: null }));
+    setShowSuggestions(false);
+    clearTimeout(suggestTimerRef.current);
+    if (val.trim().length >= 6) {
+      suggestTimerRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/companies/suggest?q=${encodeURIComponent(val.trim())}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          setCompanySuggestions(data);
+          setShowSuggestions(data.length > 0);
+        } catch {
+          // silently ignore
+        }
+      }, 300);
+    } else {
+      setCompanySuggestions([]);
+    }
+  }, [setField]);
+
+  function handleSelectSuggestion(suggestion) {
+    setForm((prev) => ({
+      ...prev,
+      company: suggestion.name,
+      companyId: suggestion.id,
+    }));
+    setCompanySuggestions([]);
+    setShowSuggestions(false);
+  }
+
   function validate() {
     const next = { subject: '', customerEmail: '' };
     let ok = true;
@@ -237,6 +275,7 @@ export default function NewTicketForm({ onClose, onCreated }) {
         customerName: form.customerName.trim() || undefined,
         phone: form.phone.trim() || undefined,
         company: form.company.trim() || undefined,
+        companyId: form.companyId || undefined,
         category: form.category,
         priority: form.priority,
         initialMessage: form.initialMessage.trim() || undefined,
@@ -392,7 +431,7 @@ export default function NewTicketForm({ onClose, onCreated }) {
                   autoComplete="tel"
                 />
               </div>
-              <div className="form-group">
+              <div className="form-group" style={{ position: 'relative' }}>
                 <label htmlFor="new-company" className="form-label">
                   Company
                   <span style={{ fontWeight: 400, color: 'var(--gray-400)', marginLeft: 6 }}>(optional)</span>
@@ -403,9 +442,39 @@ export default function NewTicketForm({ onClose, onCreated }) {
                   className="form-input"
                   placeholder="e.g. Acme Corp"
                   value={form.company}
-                  onChange={(e) => setField('company', e.target.value)}
-                  autoComplete="organization"
+                  onChange={handleCompanyChange}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  autoComplete="off"
                 />
+                {form.companyId && (
+                  <span className="ntf-company-linked">
+                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                      <circle cx="5.5" cy="5.5" r="4.5" fill="var(--brand-light)" stroke="var(--brand)" strokeWidth="1.2" />
+                      <path d="M3 5.5l1.8 1.8L8 3.5" stroke="var(--brand)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Linked to company record
+                  </span>
+                )}
+                {showSuggestions && companySuggestions.length > 0 && (
+                  <ul className="ntf-suggest-list" role="listbox" aria-label="Company suggestions">
+                    {companySuggestions.map((s) => (
+                      <li
+                        key={s.id}
+                        className="ntf-suggest-item"
+                        role="option"
+                        onMouseDown={() => handleSelectSuggestion(s)}
+                      >
+                        <span className="ntf-suggest-name">{s.name}</span>
+                        {s.primary_contact && (
+                          <span className="ntf-suggest-meta">{s.primary_contact}</span>
+                        )}
+                        {s.address && (
+                          <span className="ntf-suggest-meta">{s.address}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
 

@@ -80,6 +80,12 @@ app.use('/api/tickets', requireAuth, ticketsRouter);
 const customersRouter = require('./routes/customers');
 app.use('/api/customers', requireAuth, customersRouter);
 
+// ── Company routes (protected) ────────────────────────────────
+// Companies are derived from the company column on customers + tickets —
+// no separate table. All endpoints are read-only (no POST/PATCH/DELETE).
+const companiesRouter = require('./routes/companies');
+app.use('/api/companies', requireAuth, companiesRouter);
+
 // ── SPA catch-all — must be last ─────────────────────────────
 // Any non-API request gets index.html so client-side routing works.
 app.get('*', (req, res) => {

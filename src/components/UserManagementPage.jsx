@@ -197,14 +197,16 @@ export default function UserManagementPage() {
   return (
     <div className="admin-page">
       <div className="admin-page-header">
-        <div className="admin-page-header-row">
-          <div>
-            <h1 className="admin-page-title">User Management</h1>
-            <p className="admin-page-subtitle">Create and manage agent and admin accounts.</p>
+        <div className="admin-page-header-inner">
+          <div className="admin-page-header-row">
+            <div>
+              <h1 className="admin-page-title">User Management</h1>
+              <p className="admin-page-subtitle">Create and manage agent and admin accounts.</p>
+            </div>
+            <button className="btn btn-primary" onClick={() => setShowCreateUser(true)}>
+              + Add User
+            </button>
           </div>
-          <button className="btn-primary" onClick={() => setShowCreateUser(true)}>
-            + Add User
-          </button>
         </div>
       </div>
 

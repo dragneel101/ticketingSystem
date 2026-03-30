@@ -73,6 +73,13 @@ app.use('/api/settings', requireAuth, settingsRouter);
 const ticketsRouter = require('./routes/tickets');
 app.use('/api/tickets', requireAuth, ticketsRouter);
 
+// ── Customer routes (protected) ──────────────────────────────
+// All customer endpoints require an active session.
+// The DELETE route enforces admin-only internally (same pattern as
+// DELETE /api/tickets/:id which uses the adminOnly middleware inline).
+const customersRouter = require('./routes/customers');
+app.use('/api/customers', requireAuth, customersRouter);
+
 // ── SPA catch-all — must be last ─────────────────────────────
 // Any non-API request gets index.html so client-side routing works.
 app.get('*', (req, res) => {

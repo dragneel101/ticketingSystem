@@ -9,6 +9,7 @@ import LoginForm from './components/LoginForm';
 import UserManagementPage from './components/UserManagementPage';
 import AdminConfigPage from './components/AdminConfigPage';
 import DashboardPage from './components/DashboardPage';
+import CustomersPage from './components/CustomersPage';
 
 // Top-level views. DASHBOARD is the default landing page after login.
 // TICKET_DETAIL is a full-page takeover that hides the sidebar and uses
@@ -18,6 +19,7 @@ const VIEWS = {
   DASHBOARD: 'dashboard',
   TICKETS: 'tickets',
   TICKET_DETAIL: 'ticket_detail',
+  CUSTOMERS: 'customers',
   USERS: 'users',
   SETTINGS: 'settings',
 };
@@ -76,44 +78,52 @@ function AppShell() {
   return (
     <>
       <header className="app-header">
-        <span className="app-header-brand">Support Portal</span>
+        <div className="app-header-inner">
+          <span className="app-header-brand">Support Portal</span>
 
-        {/* Main nav — Dashboard and Tickets are visible to all roles.
-            Users and Settings are admin-only, guarded here and at render time. */}
-        <nav className="app-header-nav" aria-label="Main navigation">
-          <button
-            className={`app-header-nav-item${activeView === VIEWS.DASHBOARD ? ' app-header-nav-item--active' : ''}`}
-            onClick={() => handleNavClick(VIEWS.DASHBOARD)}
-          >
-            Dashboard
-          </button>
-          <button
-            className={`app-header-nav-item${activeView === VIEWS.TICKETS ? ' app-header-nav-item--active' : ''}`}
-            onClick={() => handleNavClick(VIEWS.TICKETS)}
-          >
-            Tickets
-          </button>
-          {isAdmin && (
+          {/* Main nav — Dashboard and Tickets are visible to all roles.
+              Users and Settings are admin-only, guarded here and at render time. */}
+          <nav className="app-header-nav" aria-label="Main navigation">
             <button
-              className={`app-header-nav-item${activeView === VIEWS.USERS ? ' app-header-nav-item--active' : ''}`}
-              onClick={() => handleNavClick(VIEWS.USERS)}
+              className={`app-header-nav-item${activeView === VIEWS.DASHBOARD ? ' app-header-nav-item--active' : ''}`}
+              onClick={() => handleNavClick(VIEWS.DASHBOARD)}
             >
-              Users
+              Dashboard
             </button>
-          )}
-          {isAdmin && (
             <button
-              className={`app-header-nav-item${activeView === VIEWS.SETTINGS ? ' app-header-nav-item--active' : ''}`}
-              onClick={() => handleNavClick(VIEWS.SETTINGS)}
+              className={`app-header-nav-item${activeView === VIEWS.TICKETS ? ' app-header-nav-item--active' : ''}`}
+              onClick={() => handleNavClick(VIEWS.TICKETS)}
             >
-              Settings
+              Tickets
             </button>
-          )}
-        </nav>
+            <button
+              className={`app-header-nav-item${activeView === VIEWS.CUSTOMERS ? ' app-header-nav-item--active' : ''}`}
+              onClick={() => handleNavClick(VIEWS.CUSTOMERS)}
+            >
+              Customers
+            </button>
+            {isAdmin && (
+              <button
+                className={`app-header-nav-item${activeView === VIEWS.USERS ? ' app-header-nav-item--active' : ''}`}
+                onClick={() => handleNavClick(VIEWS.USERS)}
+              >
+                Users
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                className={`app-header-nav-item${activeView === VIEWS.SETTINGS ? ' app-header-nav-item--active' : ''}`}
+                onClick={() => handleNavClick(VIEWS.SETTINGS)}
+              >
+                Settings
+              </button>
+            )}
+          </nav>
 
-        <div className="app-header-user">
-          <span className="app-header-name">{user?.name}</span>
-          <button className="app-header-logout" onClick={handleLogout}>Sign out</button>
+          <div className="app-header-user">
+            <span className="app-header-name">{user?.name}</span>
+            <button className="app-header-logout" onClick={handleLogout}>Sign out</button>
+          </div>
         </div>
       </header>
 
@@ -163,6 +173,8 @@ function AppShell() {
           )}
         </div>
       )}
+
+      {activeView === VIEWS.CUSTOMERS && <CustomersPage />}
 
       {/* Guard: isAdmin check here prevents direct state mutation from reaching
           these pages even if the nav buttons are hidden for non-admins */}

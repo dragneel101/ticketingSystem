@@ -131,13 +131,15 @@ export default function DashboardPage({ onViewTicket, onNavigate }) {
 
       {/* ── page header ─────────────────────────────────────────────────── */}
       <div className="dash-header">
-        <div>
-          <h1 className="dash-title">Dashboard</h1>
-          <p className="dash-subtitle">
-            {isEmpty
-              ? 'No tickets yet — create one to get started.'
-              : `Overview across ${tickets.length} ticket${tickets.length !== 1 ? 's' : ''}`}
-          </p>
+        <div className="dash-header-inner">
+          <div>
+            <h1 className="dash-title">Dashboard</h1>
+            <p className="dash-subtitle">
+              {isEmpty
+                ? 'No tickets yet — create one to get started.'
+                : `Overview across ${tickets.length} ticket${tickets.length !== 1 ? 's' : ''}`}
+            </p>
+          </div>
         </div>
       </div>
 

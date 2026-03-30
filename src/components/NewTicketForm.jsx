@@ -8,6 +8,7 @@ const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 const INITIAL_FORM = {
   subject: '',
   customerEmail: '',
+  customerName: '',
   phone: '',
   company: '',
   category: 'Account',
@@ -151,18 +152,53 @@ export default function NewTicketForm({ onClose, onCreated }) {
   const [errors, setErrors] = useState(INITIAL_ERRORS);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [customerFound, setCustomerFound] = useState(null); // { name, company } | null
   const modalRef = useRef(null);
+  const lookupTimerRef = useRef(null);
 
   useEscapeKey(onClose);
   useFocusTrap(modalRef, true);
 
   const setField = useCallback((field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
-    // Clear error on change
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: '' }));
     }
   }, [errors]);
+
+  // Debounced customer lookup — fires 450ms after the user stops typing in the email field.
+  // On exact match, pre-fills phone/company/name only if the fields are still empty
+  // (so manual edits are never overwritten).
+  const handleEmailChange = useCallback((e) => {
+    const email = e.target.value;
+    setField('customerEmail', email);
+    setCustomerFound(null);
+
+    clearTimeout(lookupTimerRef.current);
+    if (!validateEmail(email)) return;
+
+    lookupTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/customers?search=${encodeURIComponent(email)}&limit=5`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const match = (data.customers || []).find(
+          (c) => c.email.toLowerCase() === email.toLowerCase()
+        );
+        if (!match) return;
+
+        setCustomerFound({ name: match.name, company: match.company || '' });
+        setForm((prev) => ({
+          ...prev,
+          customerName: prev.customerName || match.name || '',
+          phone: prev.phone || match.phone || '',
+          company: prev.company || match.company || '',
+        }));
+      } catch {
+        // silently ignore — lookup is best-effort
+      }
+    }, 450);
+  }, [setField]);
 
   function validate() {
     const next = { subject: '', customerEmail: '' };
@@ -198,6 +234,7 @@ export default function NewTicketForm({ onClose, onCreated }) {
       const newTicket = await addTicket({
         subject: form.subject.trim(),
         customerEmail: form.customerEmail.trim().toLowerCase(),
+        customerName: form.customerName.trim() || undefined,
         phone: form.phone.trim() || undefined,
         company: form.company.trim() || undefined,
         category: form.category,
@@ -296,7 +333,7 @@ export default function NewTicketForm({ onClose, onCreated }) {
                 className={`form-input${errors.customerEmail ? ' error' : ''}`}
                 placeholder="customer@example.com"
                 value={form.customerEmail}
-                onChange={(e) => setField('customerEmail', e.target.value)}
+                onChange={handleEmailChange}
                 aria-required="true"
                 aria-describedby={errors.customerEmail ? 'email-error' : undefined}
                 aria-invalid={!!errors.customerEmail}
@@ -310,6 +347,32 @@ export default function NewTicketForm({ onClose, onCreated }) {
                   {errors.customerEmail}
                 </span>
               )}
+              {customerFound && (
+                <span className="ntf-customer-found">
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                    <circle cx="5.5" cy="5.5" r="4.5" fill="var(--brand-light)" stroke="var(--brand)" strokeWidth="1.2" />
+                    <path d="M3 5.5l1.8 1.8L8 3.5" stroke="var(--brand)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Customer found — fields pre-filled from <strong>{customerFound.name}</strong>
+                </span>
+              )}
+            </div>
+
+            {/* Customer name */}
+            <div className="form-group">
+              <label htmlFor="new-name" className="form-label">
+                Customer Name
+                <span style={{ fontWeight: 400, color: 'var(--gray-400)', marginLeft: 6 }}>(optional)</span>
+              </label>
+              <input
+                id="new-name"
+                type="text"
+                className="form-input"
+                placeholder="e.g. Jane Smith"
+                value={form.customerName}
+                onChange={(e) => setField('customerName', e.target.value)}
+                autoComplete="name"
+              />
             </div>
 
             {/* Phone + company row */}

@@ -12,6 +12,7 @@ function formatTicket(row, messages = [], events = []) {
     id: row.ticket_ref,
     subject: row.subject,
     customerEmail: row.customer_email,
+    customerName: row.customer_name ?? null,
     // Nullable contact fields — null when not yet set
     phone: row.phone ?? null,
     company: row.company ?? null,
@@ -142,7 +143,7 @@ router.get('/:id', async (req, res) => {
 
 // ── POST /api/tickets ─────────────────────────────────────────
 router.post('/', async (req, res) => {
-  const { subject, customerEmail, category, priority, phone, company, initialMessage } = req.body;
+  const { subject, customerEmail, customerName, category, priority, phone, company, initialMessage } = req.body;
 
   if (!subject?.trim() || !customerEmail?.trim()) {
     return res.status(400).json({ error: 'subject and customerEmail are required' });
@@ -153,12 +154,13 @@ router.post('/', async (req, res) => {
     await client.query('BEGIN');
 
     const { rows } = await client.query(
-      `INSERT INTO tickets (ticket_ref, subject, customer_email, category, priority, phone, company)
-       VALUES ('TKT-' || LPAD(nextval('ticket_ref_seq')::TEXT, 3, '0'), $1, $2, $3, $4, $5, $6)
+      `INSERT INTO tickets (ticket_ref, subject, customer_email, customer_name, category, priority, phone, company)
+       VALUES ('TKT-' || LPAD(nextval('ticket_ref_seq')::TEXT, 3, '0'), $1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [
         subject.trim(),
         customerEmail.trim().toLowerCase(),
+        customerName?.trim() || null,
         category || 'General',
         priority || 'medium',
         phone?.trim() || null,

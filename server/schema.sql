@@ -168,3 +168,24 @@ BEGIN
     false
   );
 END $$;
+
+-- ── Migration: customer_name on tickets ──────────────────
+-- Stores the customer's display name alongside their email so tickets
+-- show a human name without requiring a customer record to exist.
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS customer_name VARCHAR(255);
+
+-- ── Migration: customers ──────────────────────────────────
+-- A customer record represents a real person who submits tickets.
+-- email is UNIQUE because it's our join key to tickets.customer_email —
+-- one record per contact, not per ticket. phone and company are nullable
+-- since many contacts are individuals without a company affiliation.
+-- notes is a free-text field for agents to record context about this customer.
+CREATE TABLE IF NOT EXISTS customers (
+  id         SERIAL PRIMARY KEY,
+  name       VARCHAR(255) NOT NULL,
+  email      VARCHAR(255) UNIQUE NOT NULL,
+  phone      VARCHAR(50),
+  company    VARCHAR(255),
+  notes      TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);

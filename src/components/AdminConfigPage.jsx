@@ -15,8 +15,10 @@ export default function AdminConfigPage() {
   return (
     <div className="admin-page">
       <div className="admin-page-header">
-        <h1 className="admin-page-title">Admin Configuration</h1>
-        <p className="admin-page-subtitle">Manage system-wide settings for your support portal.</p>
+        <div className="admin-page-header-inner">
+          <h1 className="admin-page-title">Admin Configuration</h1>
+          <p className="admin-page-subtitle">Manage system-wide settings for your support portal.</p>
+        </div>
       </div>
 
       <div className="admin-page-body">

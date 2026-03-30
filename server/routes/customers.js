@@ -58,10 +58,10 @@ router.get('/', async (req, res) => {
 });
 
 // ── POST /api/customers ───────────────────────────────────
-// Body: { name, email, phone?, company?, notes? }
+// Body: { name, email, phone?, company?, company_id?, notes? }
 // 409 on duplicate email — each email maps to exactly one customer record.
 router.post('/', async (req, res) => {
-  const { name, email, phone, company, notes } = req.body;
+  const { name, email, phone, company, company_id, notes } = req.body;
 
   if (!name?.trim() || !email?.trim()) {
     return res.status(400).json({ error: 'name and email are required' });
@@ -69,14 +69,15 @@ router.post('/', async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO customers (name, email, phone, company, notes)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO customers (name, email, phone, company, company_id, notes)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
       [
         name.trim(),
         email.trim().toLowerCase(),
         phone?.trim() || null,
         company?.trim() || null,
+        company_id || null,
         notes?.trim() || null,
       ]
     );
@@ -97,7 +98,7 @@ router.post('/', async (req, res) => {
 // Accepts any subset of { name, email, phone, company, notes }.
 // 404 if not found, 409 on email conflict with a different customer.
 router.patch('/:id', async (req, res) => {
-  const allowed = ['name', 'email', 'phone', 'company', 'notes'];
+  const allowed = ['name', 'email', 'phone', 'company', 'company_id', 'notes'];
   const updates = {};
 
   for (const key of allowed) {

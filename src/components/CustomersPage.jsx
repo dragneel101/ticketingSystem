@@ -110,12 +110,36 @@ function AddCustomerModal({ onClose, onCreated }) {
     email: '',
     phone: '',
     company: '',
+    companyId: null,
     notes: '',
   });
   const [loading, setLoading] = useState(false);
+  const [companySuggestions, setCompanySuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestTimerRef = useRef(null);
 
   function set(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function handleCompanyChange(val) {
+    set('company', val);
+    set('companyId', null);
+    setShowSuggestions(false);
+    clearTimeout(suggestTimerRef.current);
+    if (val.trim().length >= 6) {
+      suggestTimerRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/companies/suggest?q=${encodeURIComponent(val.trim())}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          setCompanySuggestions(data);
+          setShowSuggestions(data.length > 0);
+        } catch { /* silently ignore */ }
+      }, 300);
+    } else {
+      setCompanySuggestions([]);
+    }
   }
 
   async function handleSubmit(e) {
@@ -130,6 +154,7 @@ function AddCustomerModal({ onClose, onCreated }) {
           email: form.email,
           phone: form.phone || null,
           company: form.company || null,
+          company_id: form.companyId || null,
           notes: form.notes || null,
         }),
       });
@@ -190,15 +215,47 @@ function AddCustomerModal({ onClose, onCreated }) {
               placeholder="+1 555 000 0000"
             />
           </div>
-          <div className="form-field">
+          <div className="form-field" style={{ position: 'relative' }}>
             <label htmlFor="cust-add-company">Company</label>
             <input
               id="cust-add-company"
               type="text"
               value={form.company}
-              onChange={(e) => set('company', e.target.value)}
+              onChange={(e) => handleCompanyChange(e.target.value)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
               placeholder="Acme Corp"
+              autoComplete="off"
             />
+            {form.companyId && (
+              <span className="ntf-company-linked">
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                  <circle cx="5.5" cy="5.5" r="4.5" fill="var(--brand-light)" stroke="var(--brand)" strokeWidth="1.2" />
+                  <path d="M3 5.5l1.8 1.8L8 3.5" stroke="var(--brand)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Linked to company record
+              </span>
+            )}
+            {showSuggestions && companySuggestions.length > 0 && (
+              <ul className="ntf-suggest-list" role="listbox" aria-label="Company suggestions">
+                {companySuggestions.map((s) => (
+                  <li
+                    key={s.id}
+                    className="ntf-suggest-item"
+                    role="option"
+                    onMouseDown={() => {
+                      set('company', s.name);
+                      set('companyId', s.id);
+                      setCompanySuggestions([]);
+                      setShowSuggestions(false);
+                    }}
+                  >
+                    <span className="ntf-suggest-name">{s.name}</span>
+                    {s.primary_contact && <span className="ntf-suggest-meta">{s.primary_contact}</span>}
+                    {s.address && <span className="ntf-suggest-meta">{s.address}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div className="form-field">
             <label htmlFor="cust-add-notes">Notes</label>
@@ -230,12 +287,36 @@ function EditCustomerModal({ customer, onClose, onUpdated }) {
     email: customer.email ?? '',
     phone: customer.phone ?? '',
     company: customer.company ?? '',
+    companyId: customer.company_id ?? null,
     notes: customer.notes ?? '',
   });
   const [loading, setLoading] = useState(false);
+  const [companySuggestions, setCompanySuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestTimerRef = useRef(null);
 
   function set(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function handleCompanyChange(val) {
+    set('company', val);
+    set('companyId', null);
+    setShowSuggestions(false);
+    clearTimeout(suggestTimerRef.current);
+    if (val.trim().length >= 6) {
+      suggestTimerRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/companies/suggest?q=${encodeURIComponent(val.trim())}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          setCompanySuggestions(data);
+          setShowSuggestions(data.length > 0);
+        } catch { /* silently ignore */ }
+      }, 300);
+    } else {
+      setCompanySuggestions([]);
+    }
   }
 
   async function handleSubmit(e) {
@@ -252,6 +333,7 @@ function EditCustomerModal({ customer, onClose, onUpdated }) {
           // stores NULL in the DB rather than an empty string
           phone: form.phone || null,
           company: form.company || null,
+          company_id: form.companyId ?? null,
           notes: form.notes || null,
         }),
       });
@@ -309,14 +391,47 @@ function EditCustomerModal({ customer, onClose, onUpdated }) {
               onChange={(e) => set('phone', e.target.value)}
             />
           </div>
-          <div className="form-field">
+          <div className="form-field" style={{ position: 'relative' }}>
             <label htmlFor="cust-edit-company">Company</label>
             <input
               id="cust-edit-company"
               type="text"
               value={form.company}
-              onChange={(e) => set('company', e.target.value)}
+              onChange={(e) => handleCompanyChange(e.target.value)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+              placeholder="Acme Corp"
+              autoComplete="off"
             />
+            {form.companyId && (
+              <span className="ntf-company-linked">
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                  <circle cx="5.5" cy="5.5" r="4.5" fill="var(--brand-light)" stroke="var(--brand)" strokeWidth="1.2" />
+                  <path d="M3 5.5l1.8 1.8L8 3.5" stroke="var(--brand)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Linked to company record
+              </span>
+            )}
+            {showSuggestions && companySuggestions.length > 0 && (
+              <ul className="ntf-suggest-list" role="listbox" aria-label="Company suggestions">
+                {companySuggestions.map((s) => (
+                  <li
+                    key={s.id}
+                    className="ntf-suggest-item"
+                    role="option"
+                    onMouseDown={() => {
+                      set('company', s.name);
+                      set('companyId', s.id);
+                      setCompanySuggestions([]);
+                      setShowSuggestions(false);
+                    }}
+                  >
+                    <span className="ntf-suggest-name">{s.name}</span>
+                    {s.primary_contact && <span className="ntf-suggest-meta">{s.primary_contact}</span>}
+                    {s.address && <span className="ntf-suggest-meta">{s.address}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div className="form-field">
             <label htmlFor="cust-edit-notes">Notes</label>

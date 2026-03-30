@@ -20,6 +20,7 @@ const INITIAL_FORM = {
 const INITIAL_ERRORS = {
   subject: '',
   customerEmail: '',
+  company: '',
 };
 
 function validateEmail(email) {
@@ -239,8 +240,13 @@ export default function NewTicketForm({ onClose, onCreated }) {
   }
 
   function validate() {
-    const next = { subject: '', customerEmail: '' };
+    const next = { subject: '', customerEmail: '', company: '' };
     let ok = true;
+
+    if (!form.company.trim()) {
+      next.company = 'Company is required';
+      ok = false;
+    }
 
     if (!form.subject.trim()) {
       next.subject = 'Subject is required';
@@ -333,6 +339,64 @@ export default function NewTicketForm({ onClose, onCreated }) {
         {/* Body */}
         <form onSubmit={handleSubmit} noValidate>
           <div className="modal-body">
+            {/* Company — required, full-width, first field */}
+            <div className="form-group" style={{ position: 'relative' }}>
+              <label htmlFor="new-company" className="form-label">
+                Company <span className="required" aria-hidden="true">*</span>
+              </label>
+              <input
+                id="new-company"
+                type="text"
+                className={`form-input${errors.company ? ' error' : ''}`}
+                placeholder="e.g. Acme Corp"
+                value={form.company}
+                onChange={handleCompanyChange}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                autoComplete="off"
+                aria-required="true"
+                aria-describedby={errors.company ? 'company-error' : undefined}
+                aria-invalid={!!errors.company}
+              />
+              {form.companyId && (
+                <span className="ntf-company-linked">
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                    <circle cx="5.5" cy="5.5" r="4.5" fill="var(--brand-light)" stroke="var(--brand)" strokeWidth="1.2" />
+                    <path d="M3 5.5l1.8 1.8L8 3.5" stroke="var(--brand)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Linked to company record
+                </span>
+              )}
+              {errors.company && (
+                <span id="company-error" className="form-error" role="alert">
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                    <circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M5.5 3.5v2.5M5.5 7.5v.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                  {errors.company}
+                </span>
+              )}
+              {showSuggestions && companySuggestions.length > 0 && (
+                <ul className="ntf-suggest-list" role="listbox" aria-label="Company suggestions">
+                  {companySuggestions.map((s) => (
+                    <li
+                      key={s.id}
+                      className="ntf-suggest-item"
+                      role="option"
+                      onMouseDown={() => handleSelectSuggestion(s)}
+                    >
+                      <span className="ntf-suggest-name">{s.name}</span>
+                      {s.primary_contact && (
+                        <span className="ntf-suggest-meta">{s.primary_contact}</span>
+                      )}
+                      {s.address && (
+                        <span className="ntf-suggest-meta">{s.address}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             {/* Subject */}
             <div className="form-group">
               <label htmlFor="new-subject" className="form-label">
@@ -414,68 +478,21 @@ export default function NewTicketForm({ onClose, onCreated }) {
               />
             </div>
 
-            {/* Phone + company row */}
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="new-phone" className="form-label">
-                  Phone
-                  <span style={{ fontWeight: 400, color: 'var(--gray-400)', marginLeft: 6 }}>(optional)</span>
-                </label>
-                <input
-                  id="new-phone"
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. +1 555 000 1234"
-                  value={form.phone}
-                  onChange={(e) => setField('phone', e.target.value)}
-                  autoComplete="tel"
-                />
-              </div>
-              <div className="form-group" style={{ position: 'relative' }}>
-                <label htmlFor="new-company" className="form-label">
-                  Company
-                  <span style={{ fontWeight: 400, color: 'var(--gray-400)', marginLeft: 6 }}>(optional)</span>
-                </label>
-                <input
-                  id="new-company"
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Acme Corp"
-                  value={form.company}
-                  onChange={handleCompanyChange}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                  autoComplete="off"
-                />
-                {form.companyId && (
-                  <span className="ntf-company-linked">
-                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-                      <circle cx="5.5" cy="5.5" r="4.5" fill="var(--brand-light)" stroke="var(--brand)" strokeWidth="1.2" />
-                      <path d="M3 5.5l1.8 1.8L8 3.5" stroke="var(--brand)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    Linked to company record
-                  </span>
-                )}
-                {showSuggestions && companySuggestions.length > 0 && (
-                  <ul className="ntf-suggest-list" role="listbox" aria-label="Company suggestions">
-                    {companySuggestions.map((s) => (
-                      <li
-                        key={s.id}
-                        className="ntf-suggest-item"
-                        role="option"
-                        onMouseDown={() => handleSelectSuggestion(s)}
-                      >
-                        <span className="ntf-suggest-name">{s.name}</span>
-                        {s.primary_contact && (
-                          <span className="ntf-suggest-meta">{s.primary_contact}</span>
-                        )}
-                        {s.address && (
-                          <span className="ntf-suggest-meta">{s.address}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+            {/* Phone — standalone */}
+            <div className="form-group">
+              <label htmlFor="new-phone" className="form-label">
+                Phone
+                <span style={{ fontWeight: 400, color: 'var(--gray-400)', marginLeft: 6 }}>(optional)</span>
+              </label>
+              <input
+                id="new-phone"
+                type="text"
+                className="form-input"
+                placeholder="e.g. +1 555 000 1234"
+                value={form.phone}
+                onChange={(e) => setField('phone', e.target.value)}
+                autoComplete="tel"
+              />
             </div>
 
             {/* Initial message */}

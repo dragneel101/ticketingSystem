@@ -453,7 +453,7 @@ function CustomerRow({ customer, isAdmin, onUpdated, onDeleted, onSelectTicket }
 }
 
 // ── CustomersPage ─────────────────────────────────────────
-export default function CustomersPage({ onSelectTicket }) {
+export default function CustomersPage({ onSelectTicket, initialSearch = '' }) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const isAdmin = user?.role === 'admin';
@@ -467,11 +467,9 @@ export default function CustomersPage({ onSelectTicket }) {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
-  // Search state — we store both the displayed value (searchInput) and the
-  // committed search term (search) separately. The debounce timer fires a
-  // fetch only after the user stops typing, avoiding a request on every keystroke.
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
+  // Seed search from initialSearch (e.g. navigating here from a ticket's customer card).
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);
   const debounceRef = useRef(null);
 
   // Fetch the customer list whenever page or search changes.

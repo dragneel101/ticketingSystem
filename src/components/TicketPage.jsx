@@ -586,7 +586,7 @@ function HistoryTab({ ticket }) {
 // ── Main TicketPage component ──────────────────────────────────
 // This replaces the old TicketDetail — it takes over the full main content
 // area. onBack() resets the view to the ticket list.
-export default function TicketPage({ ticketId, onBack }) {
+export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
   const { tickets, loadTicket, updateTicket, deleteTicket } = useTickets();
 
   // Thin wrapper: patch the ticket then immediately re-fetch so the History tab
@@ -735,7 +735,18 @@ export default function TicketPage({ ticketId, onBack }) {
 
           {/* Customer card */}
           <div className="tp-card">
-            <div className="tp-card-title">Customer</div>
+            <div className="tp-card-title-row">
+              <span className="tp-card-title">Customer</span>
+              {onViewCustomer && (
+                <button
+                  className="tp-card-link-btn"
+                  onClick={() => onViewCustomer(ticket.customerEmail)}
+                  title="View customer record"
+                >
+                  View record →
+                </button>
+              )}
+            </div>
             {ticket.customerName && (
               <div className="tp-info-row">
                 <span className="tp-info-label">Name</span>

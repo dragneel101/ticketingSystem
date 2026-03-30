@@ -31,6 +31,7 @@ function AppShell() {
   const [activeView, setActiveView] = useState(VIEWS.DASHBOARD);
   const [selectedId, setSelectedId] = useState(null);
   const [showNewTicket, setShowNewTicket] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState('');
 
   async function handleLogout() {
     await logout();
@@ -71,6 +72,13 @@ function AppShell() {
   // Accepts a VIEWS value string so DashboardPage doesn't need to import VIEWS.
   const handleNavigate = useCallback((view) => {
     setActiveView(view);
+  }, []);
+
+  // Called by TicketPage's customer card — navigates to Customers page with
+  // the customer's email pre-filled in the search box.
+  const handleViewCustomer = useCallback((email) => {
+    setCustomerSearch(email);
+    setActiveView(VIEWS.CUSTOMERS);
   }, []);
 
   const isAdmin = user?.role === 'admin';
@@ -164,6 +172,7 @@ function AppShell() {
             key={selectedId}
             ticketId={selectedId}
             onBack={() => setActiveView(VIEWS.TICKETS)}
+            onViewCustomer={handleViewCustomer}
           />
           {showNewTicket && (
             <NewTicketForm
@@ -174,7 +183,12 @@ function AppShell() {
         </div>
       )}
 
-      {activeView === VIEWS.CUSTOMERS && <CustomersPage onSelectTicket={handleSelectTicket} />}
+      {activeView === VIEWS.CUSTOMERS && (
+        <CustomersPage
+          onSelectTicket={handleSelectTicket}
+          initialSearch={customerSearch}
+        />
+      )}
 
       {/* Guard: isAdmin check here prevents direct state mutation from reaching
           these pages even if the nav buttons are hidden for non-admins */}

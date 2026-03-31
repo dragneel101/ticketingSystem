@@ -114,6 +114,7 @@ function AddCustomerModal({ onClose, onCreated }) {
     notes: '',
   });
   const [loading, setLoading] = useState(false);
+  const [companyError, setCompanyError] = useState('');
   const [companySuggestions, setCompanySuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestTimerRef = useRef(null);
@@ -125,6 +126,7 @@ function AddCustomerModal({ onClose, onCreated }) {
   function handleCompanyChange(val) {
     set('company', val);
     set('companyId', null);
+    setCompanyError('');
     setShowSuggestions(false);
     clearTimeout(suggestTimerRef.current);
     if (val.trim().length >= 6) {
@@ -144,6 +146,9 @@ function AddCustomerModal({ onClose, onCreated }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!form.company?.trim()) { setCompanyError('Company is required'); return; }
+    if (!form.companyId) { setCompanyError('Select a company from the suggestions'); return; }
+    setCompanyError('');
     setLoading(true);
     try {
       const res = await fetch('/api/customers', {
@@ -216,7 +221,7 @@ function AddCustomerModal({ onClose, onCreated }) {
             />
           </div>
           <div className="form-field" style={{ position: 'relative' }}>
-            <label htmlFor="cust-add-company">Company</label>
+            <label htmlFor="cust-add-company">Company *</label>
             <input
               id="cust-add-company"
               type="text"
@@ -235,6 +240,15 @@ function AddCustomerModal({ onClose, onCreated }) {
                 Linked to company record
               </span>
             )}
+            {companyError && (
+              <span className="form-error" role="alert">
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                  <circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M5.5 3.5v2.5M5.5 7.5v.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+                {companyError}
+              </span>
+            )}
             {showSuggestions && companySuggestions.length > 0 && (
               <ul className="ntf-suggest-list" role="listbox" aria-label="Company suggestions">
                 {companySuggestions.map((s) => (
@@ -245,6 +259,7 @@ function AddCustomerModal({ onClose, onCreated }) {
                     onMouseDown={() => {
                       set('company', s.name);
                       set('companyId', s.id);
+                      setCompanyError('');
                       setCompanySuggestions([]);
                       setShowSuggestions(false);
                     }}
@@ -291,6 +306,7 @@ function EditCustomerModal({ customer, onClose, onUpdated }) {
     notes: customer.notes ?? '',
   });
   const [loading, setLoading] = useState(false);
+  const [companyError, setCompanyError] = useState('');
   const [companySuggestions, setCompanySuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestTimerRef = useRef(null);
@@ -302,6 +318,7 @@ function EditCustomerModal({ customer, onClose, onUpdated }) {
   function handleCompanyChange(val) {
     set('company', val);
     set('companyId', null);
+    setCompanyError('');
     setShowSuggestions(false);
     clearTimeout(suggestTimerRef.current);
     if (val.trim().length >= 6) {
@@ -321,6 +338,9 @@ function EditCustomerModal({ customer, onClose, onUpdated }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!form.company?.trim()) { setCompanyError('Company is required'); return; }
+    if (!form.companyId) { setCompanyError('Select a company from the suggestions'); return; }
+    setCompanyError('');
     setLoading(true);
     try {
       const res = await fetch(`/api/customers/${customer.id}`, {
@@ -392,7 +412,7 @@ function EditCustomerModal({ customer, onClose, onUpdated }) {
             />
           </div>
           <div className="form-field" style={{ position: 'relative' }}>
-            <label htmlFor="cust-edit-company">Company</label>
+            <label htmlFor="cust-edit-company">Company *</label>
             <input
               id="cust-edit-company"
               type="text"
@@ -411,6 +431,15 @@ function EditCustomerModal({ customer, onClose, onUpdated }) {
                 Linked to company record
               </span>
             )}
+            {companyError && (
+              <span className="form-error" role="alert">
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                  <circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M5.5 3.5v2.5M5.5 7.5v.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+                {companyError}
+              </span>
+            )}
             {showSuggestions && companySuggestions.length > 0 && (
               <ul className="ntf-suggest-list" role="listbox" aria-label="Company suggestions">
                 {companySuggestions.map((s) => (
@@ -421,6 +450,7 @@ function EditCustomerModal({ customer, onClose, onUpdated }) {
                     onMouseDown={() => {
                       set('company', s.name);
                       set('companyId', s.id);
+                      setCompanyError('');
                       setCompanySuggestions([]);
                       setShowSuggestions(false);
                     }}

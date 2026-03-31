@@ -94,6 +94,33 @@ router.post('/', async (req, res) => {
   }
 });
 
+// ── GET /api/customers/suggest ────────────────────────────
+// Typeahead endpoint — registered BEFORE /:id so Express doesn't treat
+// the literal string "suggest" as a customer id.
+// ?q= (min 2 chars) → array of { id, name, email, company, phone }, limit 8.
+// Searches name and email with ILIKE — same fields the main GET / searches.
+router.get('/suggest', async (req, res) => {
+  const q = req.query.q?.trim();
+  if (!q || q.length < 2) {
+    return res.json([]);
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, email, company, phone
+       FROM customers
+       WHERE name ILIKE $1 OR email ILIKE $1
+       ORDER BY name ASC
+       LIMIT 8`,
+      [`%${q}%`]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch suggestions' });
+  }
+});
+
 // ── PATCH /api/customers/:id ──────────────────────────────
 // Accepts any subset of { name, email, phone, company, notes }.
 // 404 if not found, 409 on email conflict with a different customer.

@@ -9,6 +9,7 @@ const INITIAL_FORM = {
   subject: '',
   customerEmail: '',
   customerName: '',
+  customerId: null,
   phone: '',
   company: '',
   companyId: null,
@@ -20,6 +21,7 @@ const INITIAL_FORM = {
 const INITIAL_ERRORS = {
   subject: '',
   customerEmail: '',
+  customerName: '',
   company: '',
 };
 
@@ -157,9 +159,12 @@ export default function NewTicketForm({ onClose, onCreated }) {
   const [customerFound, setCustomerFound] = useState(null); // { name, company } | null
   const [companySuggestions, setCompanySuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [nameSuggestions, setNameSuggestions] = useState([]);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
   const modalRef = useRef(null);
   const lookupTimerRef = useRef(null);
   const suggestTimerRef = useRef(null);
+  const nameTimerRef = useRef(null);
 
   useEscapeKey(onClose);
   useFocusTrap(modalRef, true);
@@ -193,11 +198,16 @@ export default function NewTicketForm({ onClose, onCreated }) {
         if (!match) return;
 
         setCustomerFound({ name: match.name, company: match.company || '' });
+        // Pre-fill all fields from the matched record, but never overwrite
+        // values the user already typed manually. Always set the ids so
+        // validation knows this customer is properly linked.
         setForm((prev) => ({
           ...prev,
           customerName: prev.customerName || match.name || '',
+          customerId: match.id,
           phone: prev.phone || match.phone || '',
           company: prev.company || match.company || '',
+          companyId: prev.companyId || match.company_id || null,
         }));
       } catch {
         // silently ignore — lookup is best-effort
@@ -239,12 +249,63 @@ export default function NewTicketForm({ onClose, onCreated }) {
     setShowSuggestions(false);
   }
 
+  const handleNameChange = useCallback((e) => {
+    const val = e.target.value;
+    // Typing in the name field breaks the customer link — the user is
+    // manually editing, so we clear the id until they pick from suggestions.
+    setForm((prev) => ({ ...prev, customerName: val, customerId: null }));
+    if (errors.customerName) {
+      setErrors((prev) => ({ ...prev, customerName: '' }));
+    }
+    setCustomerFound(null);
+    setShowNameSuggestions(false);
+    clearTimeout(nameTimerRef.current);
+
+    if (val.trim().length >= 2) {
+      nameTimerRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/customers/suggest?q=${encodeURIComponent(val.trim())}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          setNameSuggestions(data);
+          setShowNameSuggestions(data.length > 0);
+        } catch {
+          // silently ignore
+        }
+      }, 300);
+    } else {
+      setNameSuggestions([]);
+    }
+  }, [errors.customerName]);
+
+  function handleSelectNameSuggestion(customer) {
+    // Selecting from the dropdown pre-fills all related fields and locks
+    // in the customerId so validation passes.
+    setForm((prev) => ({
+      ...prev,
+      customerName: customer.name,
+      customerId: customer.id,
+      customerEmail: customer.email || prev.customerEmail,
+      phone: prev.phone || customer.phone || '',
+      company: prev.company || customer.company || '',
+      // Don't overwrite companyId if already set from a previous selection
+      companyId: prev.companyId || null,
+    }));
+    setCustomerFound({ name: customer.name, company: customer.company || '' });
+    setNameSuggestions([]);
+    setShowNameSuggestions(false);
+    setErrors((prev) => ({ ...prev, customerName: '', customerEmail: '' }));
+  }
+
   function validate() {
-    const next = { subject: '', customerEmail: '', company: '' };
+    const next = { subject: '', customerEmail: '', customerName: '', company: '' };
     let ok = true;
 
     if (!form.company.trim()) {
       next.company = 'Company is required';
+      ok = false;
+    } else if (!form.companyId) {
+      next.company = 'Select a company from the suggestions';
       ok = false;
     }
 
@@ -264,6 +325,14 @@ export default function NewTicketForm({ onClose, onCreated }) {
       ok = false;
     }
 
+    if (!form.customerName.trim()) {
+      next.customerName = 'Customer name is required';
+      ok = false;
+    } else if (!form.customerId) {
+      next.customerName = 'Select a customer from the suggestions';
+      ok = false;
+    }
+
     setErrors(next);
     return ok;
   }
@@ -279,6 +348,7 @@ export default function NewTicketForm({ onClose, onCreated }) {
         subject: form.subject.trim(),
         customerEmail: form.customerEmail.trim().toLowerCase(),
         customerName: form.customerName.trim() || undefined,
+        customerId: form.customerId || undefined,
         phone: form.phone.trim() || undefined,
         company: form.company.trim() || undefined,
         companyId: form.companyId || undefined,
@@ -461,21 +531,50 @@ export default function NewTicketForm({ onClose, onCreated }) {
               )}
             </div>
 
-            {/* Customer name */}
-            <div className="form-group">
+            {/* Customer name — required, with typeahead autocomplete */}
+            <div className="form-group" style={{ position: 'relative' }}>
               <label htmlFor="new-name" className="form-label">
-                Customer Name
-                <span style={{ fontWeight: 400, color: 'var(--gray-400)', marginLeft: 6 }}>(optional)</span>
+                Customer Name <span className="required" aria-hidden="true">*</span>
               </label>
               <input
                 id="new-name"
                 type="text"
-                className="form-input"
+                className={`form-input${errors.customerName ? ' error' : ''}`}
                 placeholder="e.g. Jane Smith"
                 value={form.customerName}
-                onChange={(e) => setField('customerName', e.target.value)}
-                autoComplete="name"
+                onChange={handleNameChange}
+                onBlur={() => setTimeout(() => setShowNameSuggestions(false), 150)}
+                autoComplete="off"
+                aria-required="true"
+                aria-describedby={errors.customerName ? 'name-error' : undefined}
+                aria-invalid={!!errors.customerName}
               />
+              {errors.customerName && (
+                <span id="name-error" className="form-error" role="alert">
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                    <circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M5.5 3.5v2.5M5.5 7.5v.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                  {errors.customerName}
+                </span>
+              )}
+              {showNameSuggestions && nameSuggestions.length > 0 && (
+                <ul className="ntf-suggest-list" role="listbox" aria-label="Customer suggestions">
+                  {nameSuggestions.map((c) => (
+                    <li
+                      key={c.id}
+                      className="ntf-suggest-item"
+                      role="option"
+                      onMouseDown={() => handleSelectNameSuggestion(c)}
+                    >
+                      <span className="ntf-suggest-name">{c.name}</span>
+                      {c.email && (
+                        <span className="ntf-suggest-meta">{c.email}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Phone — standalone */}

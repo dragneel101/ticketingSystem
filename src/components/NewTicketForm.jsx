@@ -222,7 +222,7 @@ export default function NewTicketForm({ onClose, onCreated }) {
     setForm((prev) => ({ ...prev, companyId: null }));
     setShowSuggestions(false);
     clearTimeout(suggestTimerRef.current);
-    if (val.trim().length >= 6) {
+    if (val.trim().length >= 2) {
       suggestTimerRef.current = setTimeout(async () => {
         try {
           const res = await fetch(`/api/companies/suggest?q=${encodeURIComponent(val.trim())}`);
@@ -467,31 +467,58 @@ export default function NewTicketForm({ onClose, onCreated }) {
               )}
             </div>
 
-            {/* Subject */}
-            <div className="form-group">
-              <label htmlFor="new-subject" className="form-label">
-                Subject <span className="required" aria-hidden="true">*</span>
+            {/* Customer name — required, with typeahead autocomplete */}
+            <div className="form-group" style={{ position: 'relative' }}>
+              <label htmlFor="new-name" className="form-label">
+                Customer Name <span className="required" aria-hidden="true">*</span>
               </label>
               <input
-                id="new-subject"
+                id="new-name"
                 type="text"
-                className={`form-input${errors.subject ? ' error' : ''}`}
-                placeholder="Brief description of the issue"
-                value={form.subject}
-                onChange={(e) => setField('subject', e.target.value)}
+                className={`form-input${errors.customerName ? ' error' : ''}`}
+                placeholder="e.g. Jane Smith"
+                value={form.customerName}
+                onChange={handleNameChange}
+                onBlur={() => setTimeout(() => setShowNameSuggestions(false), 150)}
+                autoComplete="off"
                 aria-required="true"
-                aria-describedby={errors.subject ? 'subject-error' : undefined}
-                aria-invalid={!!errors.subject}
-                maxLength={120}
+                aria-describedby={errors.customerName ? 'name-error' : undefined}
+                aria-invalid={!!errors.customerName}
               />
-              {errors.subject && (
-                <span id="subject-error" className="form-error" role="alert">
+              {errors.customerName && (
+                <span id="name-error" className="form-error" role="alert">
                   <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
                     <circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" strokeWidth="1.2" />
                     <path d="M5.5 3.5v2.5M5.5 7.5v.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
                   </svg>
-                  {errors.subject}
+                  {errors.customerName}
                 </span>
+              )}
+              {customerFound && (
+                <span className="ntf-customer-found">
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                    <circle cx="5.5" cy="5.5" r="4.5" fill="var(--brand-light)" stroke="var(--brand)" strokeWidth="1.2" />
+                    <path d="M3 5.5l1.8 1.8L8 3.5" stroke="var(--brand)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Customer found — fields pre-filled from <strong>{customerFound.name}</strong>
+                </span>
+              )}
+              {showNameSuggestions && nameSuggestions.length > 0 && (
+                <ul className="ntf-suggest-list" role="listbox" aria-label="Customer suggestions">
+                  {nameSuggestions.map((c) => (
+                    <li
+                      key={c.id}
+                      className="ntf-suggest-item"
+                      role="option"
+                      onMouseDown={() => handleSelectNameSuggestion(c)}
+                    >
+                      <span className="ntf-suggest-name">{c.name}</span>
+                      {c.email && (
+                        <span className="ntf-suggest-meta">{c.email}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
 
@@ -520,64 +547,9 @@ export default function NewTicketForm({ onClose, onCreated }) {
                   {errors.customerEmail}
                 </span>
               )}
-              {customerFound && (
-                <span className="ntf-customer-found">
-                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-                    <circle cx="5.5" cy="5.5" r="4.5" fill="var(--brand-light)" stroke="var(--brand)" strokeWidth="1.2" />
-                    <path d="M3 5.5l1.8 1.8L8 3.5" stroke="var(--brand)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  Customer found — fields pre-filled from <strong>{customerFound.name}</strong>
-                </span>
-              )}
             </div>
 
-            {/* Customer name — required, with typeahead autocomplete */}
-            <div className="form-group" style={{ position: 'relative' }}>
-              <label htmlFor="new-name" className="form-label">
-                Customer Name <span className="required" aria-hidden="true">*</span>
-              </label>
-              <input
-                id="new-name"
-                type="text"
-                className={`form-input${errors.customerName ? ' error' : ''}`}
-                placeholder="e.g. Jane Smith"
-                value={form.customerName}
-                onChange={handleNameChange}
-                onBlur={() => setTimeout(() => setShowNameSuggestions(false), 150)}
-                autoComplete="off"
-                aria-required="true"
-                aria-describedby={errors.customerName ? 'name-error' : undefined}
-                aria-invalid={!!errors.customerName}
-              />
-              {errors.customerName && (
-                <span id="name-error" className="form-error" role="alert">
-                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-                    <circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" strokeWidth="1.2" />
-                    <path d="M5.5 3.5v2.5M5.5 7.5v.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-                  </svg>
-                  {errors.customerName}
-                </span>
-              )}
-              {showNameSuggestions && nameSuggestions.length > 0 && (
-                <ul className="ntf-suggest-list" role="listbox" aria-label="Customer suggestions">
-                  {nameSuggestions.map((c) => (
-                    <li
-                      key={c.id}
-                      className="ntf-suggest-item"
-                      role="option"
-                      onMouseDown={() => handleSelectNameSuggestion(c)}
-                    >
-                      <span className="ntf-suggest-name">{c.name}</span>
-                      {c.email && (
-                        <span className="ntf-suggest-meta">{c.email}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {/* Phone — standalone */}
+            {/* Phone */}
             <div className="form-group">
               <label htmlFor="new-phone" className="form-label">
                 Phone
@@ -592,6 +564,34 @@ export default function NewTicketForm({ onClose, onCreated }) {
                 onChange={(e) => setField('phone', e.target.value)}
                 autoComplete="tel"
               />
+            </div>
+
+            {/* Subject */}
+            <div className="form-group">
+              <label htmlFor="new-subject" className="form-label">
+                Subject <span className="required" aria-hidden="true">*</span>
+              </label>
+              <input
+                id="new-subject"
+                type="text"
+                className={`form-input${errors.subject ? ' error' : ''}`}
+                placeholder="Brief description of the issue"
+                value={form.subject}
+                onChange={(e) => setField('subject', e.target.value)}
+                aria-required="true"
+                aria-describedby={errors.subject ? 'subject-error' : undefined}
+                aria-invalid={!!errors.subject}
+                maxLength={120}
+              />
+              {errors.subject && (
+                <span id="subject-error" className="form-error" role="alert">
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                    <circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" strokeWidth="1.2" />
+                    <path d="M5.5 3.5v2.5M5.5 7.5v.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                  {errors.subject}
+                </span>
+              )}
             </div>
 
             {/* Initial message */}

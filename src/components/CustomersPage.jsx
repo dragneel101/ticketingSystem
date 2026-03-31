@@ -129,7 +129,7 @@ function AddCustomerModal({ onClose, onCreated }) {
     setCompanyError('');
     setShowSuggestions(false);
     clearTimeout(suggestTimerRef.current);
-    if (val.trim().length >= 6) {
+    if (val.trim().length >= 2) {
       suggestTimerRef.current = setTimeout(async () => {
         try {
           const res = await fetch(`/api/companies/suggest?q=${encodeURIComponent(val.trim())}`);
@@ -321,7 +321,7 @@ function EditCustomerModal({ customer, onClose, onUpdated }) {
     setCompanyError('');
     setShowSuggestions(false);
     clearTimeout(suggestTimerRef.current);
-    if (val.trim().length >= 6) {
+    if (val.trim().length >= 2) {
       suggestTimerRef.current = setTimeout(async () => {
         try {
           const res = await fetch(`/api/companies/suggest?q=${encodeURIComponent(val.trim())}`);

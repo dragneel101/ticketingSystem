@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { STATUS_LABELS } from '../utils/statusConfig';
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -11,8 +12,6 @@ function formatDate(iso) {
     day: 'numeric',
   }).format(new Date(iso));
 }
-
-const STATUS_LABELS = { open: 'Open', pending: 'Pending', resolved: 'Resolved', closed: 'Closed' };
 
 // ── CustomerTicketsModal ──────────────────────────────────
 function CustomerTicketsModal({ customer, onClose, onSelectTicket }) {

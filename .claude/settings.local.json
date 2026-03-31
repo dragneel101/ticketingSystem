@@ -7,7 +7,8 @@
       "Bash(npm uninstall:*)",
       "Bash(npm test:*)",
       "Bash(node --check server/routes/customers.js)",
-      "Bash(node --check server/app.js)"
+      "Bash(node --check server/app.js)",
+      "Bash(node -e \"require\\(''./node_modules/recharts/package.json''\\)\")"
     ]
   }
 }

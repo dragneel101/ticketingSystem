@@ -1,11 +1,19 @@
 import { useMemo } from 'react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts';
 import { useTickets } from '../context/TicketContext';
 import { useAuth } from '../context/AuthContext';
+import { STATUS_LABELS } from '../utils/statusConfig';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-// Format an ISO date string into something readable (e.g. "Mar 27, 2026").
-// Using Intl.DateTimeFormat rather than a library keeps bundle size at zero.
 function fmtDate(iso) {
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
@@ -14,14 +22,45 @@ function fmtDate(iso) {
   }).format(new Date(iso));
 }
 
-// Capitalise the first letter — used for status/priority display labels.
 function cap(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+// ─── constants ───────────────────────────────────────────────────────────────
+
+const STATUS_COLORS = {
+  'unassigned':            '#9aa3b5',
+  'assigned':              '#3b82f6',
+  'in-progress':           '#7c3aed',
+  'requesting-escalation': '#ef4444',
+  'pending-client':        '#f0a500',
+  'pending-vendor':        '#8b5cf6',
+  'scheduled':             '#10b981',
+  'resolved':              '#17a2b8',
+  'closed':                '#6b7280',
+};
+
+const STATUS_CHART_ORDER = [
+  { key: 'unassigned',            label: 'Unassigned' },
+  { key: 'assigned',              label: 'Assigned' },
+  { key: 'in-progress',          label: 'In Progress' },
+  { key: 'requesting-escalation', label: 'Escalation' },
+  { key: 'pending-client',        label: 'Pending Client' },
+  { key: 'pending-vendor',        label: 'Pending Vendor' },
+  { key: 'scheduled',             label: 'Scheduled' },
+  { key: 'resolved',              label: 'Resolved' },
+  { key: 'closed',                label: 'Closed' },
+];
+
+const PRIORITY_COLORS = {
+  urgent: '#e74c3c',
+  high:   '#e67e22',
+  medium: '#3498db',
+  low:    '#9aa3b5',
+};
+
 // ─── sub-components ─────────────────────────────────────────────────────────
 
-// A single stat card: big number + label underneath.
 function StatCard({ label, value, accent }) {
   return (
     <div className="dash-stat-card" style={{ '--accent': accent }}>
@@ -31,34 +70,24 @@ function StatCard({ label, value, accent }) {
   );
 }
 
-// One horizontal bar in the priority breakdown chart.
-// `pct` is 0–100, representing this priority's share of the max bar width.
-// We use an inline style for the width so we can drive it purely from data —
-// no need for a separate CSS class per percentage value.
-function PriorityBar({ priority, count, pct }) {
+function StatusTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const { name, value } = payload[0];
   return (
-    <div className="dash-bar-row">
-      <span className="dash-bar-label">
-        {/* Priority dot — reuses the existing --p-{priority}-dot token */}
-        <span
-          className="dash-bar-dot"
-          style={{ background: `var(--p-${priority}-dot)` }}
-        />
-        {cap(priority)}
-      </span>
+    <div className="dash-chart-tooltip">
+      <span className="dash-chart-tooltip-label">{name}</span>
+      <span className="dash-chart-tooltip-value">{value}</span>
+    </div>
+  );
+}
 
-      {/* Track + filled bar */}
-      <div className="dash-bar-track">
-        <div
-          className="dash-bar-fill"
-          style={{
-            width: `${pct}%`,
-            background: `var(--p-${priority}-dot)`,
-          }}
-        />
-      </div>
-
-      <span className="dash-bar-count">{count}</span>
+function PriorityTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const { name, value } = payload[0];
+  return (
+    <div className="dash-chart-tooltip">
+      <span className="dash-chart-tooltip-label">{name}</span>
+      <span className="dash-chart-tooltip-value">{value}</span>
     </div>
   );
 }
@@ -70,49 +99,48 @@ export default function DashboardPage({ onViewTicket, onNavigate }) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  // ── derived metrics ──────────────────────────────────────────────────────
-  //
-  // useMemo here: `tickets` is the only dependency. All of these aggregations
-  // run in a single pass over the array (O(n)), so we do them together rather
-  // than separate reduce calls. Even though the work is cheap, useMemo makes
-  // the dependency boundary explicit — if `tickets` doesn't change, none of
-  // these values recompute, regardless of what else re-renders in the tree.
   const metrics = useMemo(() => {
-    const byStatus = { open: 0, pending: 0, resolved: 0, closed: 0 };
+    const byStatus = {};
     const byPriority = { low: 0, medium: 0, high: 0, urgent: 0 };
-    let unassigned = 0;
+    let noOwner = 0;
     let assignedToMe = 0;
 
     for (const t of tickets) {
-      if (byStatus[t.status] !== undefined) byStatus[t.status]++;
+      // Per-status counts — keys match statusConfig keys exactly
+      byStatus[t.status] = (byStatus[t.status] || 0) + 1;
+
       if (byPriority[t.priority] !== undefined) byPriority[t.priority]++;
 
-      // assignedTo is null when no agent is assigned
-      if (t.assignedTo === null || t.assignedTo === undefined) {
-        unassigned++;
-      }
-      // Compare numeric IDs — assignedTo comes from the DB as a number,
-      // user.id is also a number from the session response
-      if (user && t.assignedTo === user.id) {
-        assignedToMe++;
-      }
+      if (t.assignedTo === null || t.assignedTo === undefined) noOwner++;
+
+      if (user && t.assignedTo === user.id) assignedToMe++;
     }
 
-    // Recent activity: last 7 tickets by creation date, newest first.
-    // slice() first so we don't mutate the context array — sort is in-place.
+    // Chart data arrays
+    const statusChartData = STATUS_CHART_ORDER.map(({ key, label }) => ({
+      name: label,
+      key,
+      value: byStatus[key] || 0,
+      color: STATUS_COLORS[key],
+    }));
+
+    const priorityChartData = [
+      { name: 'Urgent', value: byPriority.urgent || 0, color: PRIORITY_COLORS.urgent },
+      { name: 'High',   value: byPriority.high   || 0, color: PRIORITY_COLORS.high },
+      { name: 'Medium', value: byPriority.medium || 0, color: PRIORITY_COLORS.medium },
+      { name: 'Low',    value: byPriority.low    || 0, color: PRIORITY_COLORS.low },
+    ];
+
+    // Recent activity: last 8 tickets by creation date, newest first
     const recent = tickets
       .slice()
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 7);
+      .slice(0, 8);
 
-    // Largest count among priority buckets — used to scale bar widths so the
-    // highest bar always fills 100% of its track (like a mini chart axis).
-    const maxPriority = Math.max(...Object.values(byPriority), 1); // floor at 1 avoids /0
-
-    return { byStatus, byPriority, recent, maxPriority, unassigned, assignedToMe };
+    return { byStatus, byPriority, statusChartData, priorityChartData, recent, noOwner, assignedToMe };
   }, [tickets, user]);
 
-  // ── loading / empty states ───────────────────────────────────────────────
+  // ── loading state ────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="dash-page">
@@ -129,7 +157,7 @@ export default function DashboardPage({ onViewTicket, onNavigate }) {
   return (
     <div className="dash-page">
 
-      {/* ── page header ─────────────────────────────────────────────────── */}
+      {/* ── page header ───────────────────────────────────────────────────── */}
       <div className="dash-header">
         <div className="dash-header-inner">
           <div>
@@ -147,107 +175,146 @@ export default function DashboardPage({ onViewTicket, onNavigate }) {
 
         {/* ── stat cards row ──────────────────────────────────────────────── */}
         <div className="dash-stat-row">
-          <StatCard label="Total" value={tickets.length} accent="var(--brand)" />
-          <StatCard label="Open" value={metrics.byStatus.open} accent="var(--s-open-dot)" />
-          <StatCard label="Pending" value={metrics.byStatus.pending} accent="var(--s-pending-dot)" />
-          <StatCard label="Resolved" value={metrics.byStatus.resolved} accent="var(--s-resolved-dot)" />
-          <StatCard label="Closed" value={metrics.byStatus.closed} accent="var(--s-closed-dot)" />
-          {/* Unassigned is a key operational metric: non-zero means work is slipping through
-              without an owner. Shown to all authenticated users — any agent should care. */}
+          <StatCard label="Total"          value={tickets.length}                      accent="var(--brand)" />
+          <StatCard label="Unassigned"     value={metrics.byStatus['unassigned'] || 0} accent={STATUS_COLORS['unassigned']} />
+          <StatCard label="Assigned"       value={metrics.byStatus['assigned'] || 0}   accent={STATUS_COLORS['assigned']} />
+          <StatCard label="In Progress"    value={metrics.byStatus['in-progress'] || 0} accent={STATUS_COLORS['in-progress']} />
+          <StatCard label="Escalation"     value={metrics.byStatus['requesting-escalation'] || 0} accent={STATUS_COLORS['requesting-escalation']} />
+          <StatCard label="Pending Client" value={metrics.byStatus['pending-client'] || 0} accent={STATUS_COLORS['pending-client']} />
+          <StatCard label="Pending Vendor" value={metrics.byStatus['pending-vendor'] || 0} accent={STATUS_COLORS['pending-vendor']} />
+          <StatCard label="Scheduled"      value={metrics.byStatus['scheduled'] || 0}  accent={STATUS_COLORS['scheduled']} />
+          <StatCard label="Resolved"       value={metrics.byStatus['resolved'] || 0}   accent={STATUS_COLORS['resolved']} />
+          <StatCard label="Closed"         value={metrics.byStatus['closed'] || 0}     accent={STATUS_COLORS['closed']} />
           <StatCard
-            label="Unassigned"
-            value={metrics.unassigned}
-            accent={metrics.unassigned > 0 ? 'var(--p-high-dot)' : 'var(--gray-400)'}
+            label="No Owner"
+            value={metrics.noOwner}
+            accent={metrics.noOwner > 0 ? '#ef4444' : '#9aa3b5'}
           />
-          {/* "Assigned to me" only makes sense for agents/admins who are support staff.
-              user.role check also handles the case where user is null during hydration. */}
           {(user?.role === 'agent' || user?.role === 'admin') && (
-            <StatCard
-              label="Mine"
-              value={metrics.assignedToMe}
-              accent="var(--brand)"
-            />
+            <StatCard label="Mine" value={metrics.assignedToMe} accent="var(--brand)" />
           )}
         </div>
 
-        {/* ── lower grid: priority chart + recent tickets ──────────────── */}
-        <div className="dash-grid">
+        {/* ── charts row ──────────────────────────────────────────────────── */}
+        <div className="dash-charts-row">
 
-          {/* Priority breakdown — CSS bar chart, no external library */}
-          <section className="dash-card" aria-label="Tickets by priority">
-            <h2 className="dash-card-title">By Priority</h2>
-
+          {/* By Status — horizontal bar chart */}
+          <section className="dash-card dash-chart-card--status" aria-label="Tickets by status">
+            <h2 className="dash-card-title">By Status</h2>
             {isEmpty ? (
               <p className="dash-empty-section">No tickets to display.</p>
             ) : (
-              <div className="dash-bar-chart">
-                {['urgent', 'high', 'medium', 'low'].map((priority) => {
-                  const count = metrics.byPriority[priority];
-                  // Scale relative to the tallest bar, so the layout stays proportional.
-                  // Example: if urgent=8 and low=2, urgent bar = 100%, low bar = 25%.
-                  const pct = (count / metrics.maxPriority) * 100;
-                  return (
-                    <PriorityBar
-                      key={priority}
-                      priority={priority}
-                      count={count}
-                      pct={pct}
-                    />
-                  );
-                })}
-              </div>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart
+                  data={metrics.statusChartData}
+                  layout="vertical"
+                  margin={{ top: 0, right: 20, left: 0, bottom: 0 }}
+                >
+                  <XAxis
+                    type="number"
+                    tick={{ fontSize: 11, fill: 'var(--gray-400)', fontFamily: 'var(--sans)' }}
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={130}
+                    tick={{ fontSize: 11, fill: 'var(--gray-600)', fontFamily: 'var(--sans)' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip content={<StatusTooltip />} cursor={{ fill: 'var(--gray-50)' }} />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={18}>
+                    {metrics.statusChartData.map((entry) => (
+                      <Cell key={entry.key} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             )}
           </section>
 
-          {/* Recent activity */}
-          <section className="dash-card dash-card--wide" aria-label="Recent activity">
-            <h2 className="dash-card-title">Recent Activity</h2>
-
+          {/* By Priority — vertical bar chart */}
+          <section className="dash-card dash-chart-card--priority" aria-label="Tickets by priority">
+            <h2 className="dash-card-title">By Priority</h2>
             {isEmpty ? (
-              <p className="dash-empty-section">No tickets yet.</p>
+              <p className="dash-empty-section">No tickets to display.</p>
             ) : (
-              <ul className="dash-recent-list">
-                {metrics.recent.map((ticket) => (
-                  <li key={ticket.id} className="dash-recent-row">
-                    <div className="dash-recent-info">
-                      <span className="dash-recent-id">{ticket.id}</span>
-                      <span className="dash-recent-subject">{ticket.subject}</span>
-                      <span className="dash-recent-date">{fmtDate(ticket.createdAt)}</span>
-                    </div>
-
-                    <div className="dash-recent-meta">
-                      {/* Status badge — reuses existing .badge .badge-{status} classes */}
-                      <span className={`badge badge-${ticket.status}`}>
-                        {cap(ticket.status)}
-                      </span>
-
-                      {/* Priority dot — a pure visual indicator, label is redundant here */}
-                      <span
-                        className="dash-priority-dot"
-                        title={cap(ticket.priority)}
-                        style={{ background: `var(--p-${ticket.priority}-dot)` }}
-                        aria-label={`Priority: ${ticket.priority}`}
-                      />
-
-                      <button
-                        className="dash-view-btn"
-                        onClick={() => onViewTicket(ticket.id)}
-                        aria-label={`View ticket ${ticket.id}`}
-                      >
-                        View
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart
+                  data={metrics.priorityChartData}
+                  margin={{ top: 0, right: 8, left: -16, bottom: 0 }}
+                >
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 11, fill: 'var(--gray-600)', fontFamily: 'var(--sans)' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: 'var(--gray-400)', fontFamily: 'var(--sans)' }}
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip content={<PriorityTooltip />} cursor={{ fill: 'var(--gray-50)' }} />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={36}>
+                    {metrics.priorityChartData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             )}
           </section>
+
         </div>
 
-        {/* ── admin quick actions ──────────────────────────────────────────
-             Only rendered for admin users. Prop-drilling onNavigate here is
-             intentional: this is a leaf component that fires a parent action.
-             There's no need to reach into context for something this narrow. */}
+        {/* ── recent activity ──────────────────────────────────────────────── */}
+        <section className="dash-card" aria-label="Recent activity">
+          <h2 className="dash-card-title">Recent Activity</h2>
+
+          {isEmpty ? (
+            <p className="dash-empty-section">No tickets yet.</p>
+          ) : (
+            <ul className="dash-recent-list">
+              {metrics.recent.map((ticket) => (
+                <li key={ticket.id} className="dash-recent-row">
+                  <div className="dash-recent-info">
+                    <span className="dash-recent-id">{ticket.id}</span>
+                    <span className="dash-recent-subject">{ticket.subject}</span>
+                    <span className="dash-recent-date">{fmtDate(ticket.createdAt)}</span>
+                  </div>
+
+                  <div className="dash-recent-meta">
+                    <span className={`badge badge-${ticket.status}`}>
+                      {STATUS_LABELS[ticket.status] ?? cap(ticket.status)}
+                    </span>
+
+                    <span
+                      className="dash-priority-dot"
+                      title={cap(ticket.priority)}
+                      style={{ background: `var(--p-${ticket.priority}-dot)` }}
+                      aria-label={`Priority: ${ticket.priority}`}
+                    />
+
+                    <button
+                      className="dash-view-btn"
+                      onClick={() => onViewTicket(ticket.id)}
+                      aria-label={`View ticket ${ticket.id}`}
+                    >
+                      View
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* ── admin quick actions ──────────────────────────────────────────── */}
         {isAdmin && (
           <section className="dash-card dash-quick-actions" aria-label="Quick actions">
             <h2 className="dash-card-title">Quick Actions</h2>
@@ -271,7 +338,7 @@ export default function DashboardPage({ onViewTicket, onNavigate }) {
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                 </svg>
                 Settings
               </button>

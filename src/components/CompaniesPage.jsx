@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useSla } from '../context/SlaContext';
+import { STATUS_LABELS } from '../utils/statusConfig';
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -12,8 +13,6 @@ function formatDate(iso) {
     day: 'numeric',
   }).format(new Date(iso));
 }
-
-const STATUS_LABELS = { open: 'Open', pending: 'Pending', resolved: 'Resolved', closed: 'Closed' };
 
 // ── CompanyDetailPage ─────────────────────────────────────
 export function CompanyDetailPage({ company, onBack, onSelectTicket, onViewCustomer }) {
@@ -47,7 +46,7 @@ export function CompanyDetailPage({ company, onBack, onSelectTicket, onViewCusto
   }, [company.id, addToast]);
 
   const openCount = tickets.filter(
-    (t) => t.status === 'open' || t.status === 'pending'
+    (t) => t.status !== 'resolved' && t.status !== 'closed'
   ).length;
 
   // Resolve the policy name from our loaded policies list (fresher than the

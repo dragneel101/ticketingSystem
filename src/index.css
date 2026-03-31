@@ -56,6 +56,34 @@
   --s-closed-text: #5a6374;
   --s-closed-dot:  #9aa3b5;
 
+  --s-unassigned-bg:   #f4f5f7;
+  --s-unassigned-text: #5a6374;
+  --s-unassigned-dot:  #9aa3b5;
+
+  --s-assigned-bg:   #e8f0fe;
+  --s-assigned-text: #1a56db;
+  --s-assigned-dot:  #3b82f6;
+
+  --s-in-progress-bg:   #ede9fe;
+  --s-in-progress-text: #6d28d9;
+  --s-in-progress-dot:  #7c3aed;
+
+  --s-requesting-escalation-bg:   #fff1f0;
+  --s-requesting-escalation-text: #b91c1c;
+  --s-requesting-escalation-dot:  #ef4444;
+
+  --s-pending-client-bg:   #fffbea;
+  --s-pending-client-text: #92640a;
+  --s-pending-client-dot:  #f0a500;
+
+  --s-pending-vendor-bg:   #f5f3ff;
+  --s-pending-vendor-text: #5b21b6;
+  --s-pending-vendor-dot:  #8b5cf6;
+
+  --s-scheduled-bg:   #ecfdf5;
+  --s-scheduled-text: #065f46;
+  --s-scheduled-dot:  #10b981;
+
   /* Sidebar */
   --sidebar-bg:        #131723;
   --sidebar-bg-solid:  #131723;
@@ -607,6 +635,21 @@ body {
 .badge-resolved::before { background: var(--s-resolved-dot); }
 .badge-closed   { background: var(--s-closed-bg);   color: var(--s-closed-text); }
 .badge-closed::before   { background: var(--s-closed-dot); }
+
+.badge-unassigned             { background: var(--s-unassigned-bg);             color: var(--s-unassigned-text); }
+.badge-unassigned::before             { background: var(--s-unassigned-dot); }
+.badge-assigned               { background: var(--s-assigned-bg);               color: var(--s-assigned-text); }
+.badge-assigned::before               { background: var(--s-assigned-dot); }
+.badge-in-progress            { background: var(--s-in-progress-bg);            color: var(--s-in-progress-text); }
+.badge-in-progress::before            { background: var(--s-in-progress-dot); }
+.badge-requesting-escalation  { background: var(--s-requesting-escalation-bg);  color: var(--s-requesting-escalation-text); }
+.badge-requesting-escalation::before  { background: var(--s-requesting-escalation-dot); }
+.badge-pending-client         { background: var(--s-pending-client-bg);         color: var(--s-pending-client-text); }
+.badge-pending-client::before         { background: var(--s-pending-client-dot); }
+.badge-pending-vendor         { background: var(--s-pending-vendor-bg);         color: var(--s-pending-vendor-text); }
+.badge-pending-vendor::before         { background: var(--s-pending-vendor-dot); }
+.badge-scheduled              { background: var(--s-scheduled-bg);              color: var(--s-scheduled-text); }
+.badge-scheduled::before              { background: var(--s-scheduled-dot); }
 
 /* sidebar dark variants */
 .badge-dark {
@@ -2446,8 +2489,8 @@ body {
 /* ── stat cards row ───────────────────────────────────────── */
 .dash-stat-row {
   display: grid;
-  /* auto-fill so 6 or 7 cards (when "Mine" appears) lay out correctly */
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  /* auto-fill wraps gracefully across 9–12 cards at all viewport widths */
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
   gap: 1rem;
 }
 
@@ -2505,13 +2548,32 @@ body {
   color: var(--gray-400);
 }
 
-/* ── lower grid ───────────────────────────────────────────── */
-/* Two columns: priority chart (narrower) + recent list (wider) */
+/* ── lower grid (legacy — no longer used in layout, kept for safety) ─── */
 .dash-grid {
   display: grid;
   grid-template-columns: 280px 1fr;
   gap: 1rem;
   align-items: start;
+}
+
+/* ── charts row ───────────────────────────────────────────── */
+/* Two recharts cards side-by-side: status (wider) + priority (narrower). */
+.dash-charts-row {
+  display: flex;
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+/* Status bar chart card — horizontally wider, flex: 2 */
+.dash-chart-card--status {
+  flex: 2;
+  min-width: 0; /* prevents flex blowout when chart tries to be intrinsic width */
+}
+
+/* Priority bar chart card — narrower companion, flex: 1 */
+.dash-chart-card--priority {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ── card base (shared by chart, recent list, quick actions) ─ */
@@ -2612,6 +2674,32 @@ body {
   color: var(--gray-500);
 }
 
+/* ── recharts custom tooltip ─────────────────────────────── */
+.dash-chart-tooltip {
+  background: var(--gray-900);
+  color: #fff;
+  border-radius: var(--r-sm);
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
+  font-family: var(--sans);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+}
+
+.dash-chart-tooltip-label {
+  color: var(--gray-300);
+  font-weight: 500;
+}
+
+.dash-chart-tooltip-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
 /* ── recent activity list ─────────────────────────────────── */
 .dash-recent-list {
   list-style: none;
@@ -2648,6 +2736,7 @@ body {
   display: flex;
   align-items: baseline;
   gap: 0.65rem;
+  flex: 1;        /* take remaining space so subject can truncate correctly */
   min-width: 0;   /* allows text truncation to work inside a flex child */
 }
 
@@ -2769,18 +2858,26 @@ body {
 
 /* ── responsive adjustments ───────────────────────────────── */
 @media (max-width: 860px) {
-  .dash-stat-row {
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  }
-
+  /* Cards already shrink fine at 110px min — no override needed */
   .dash-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Stack charts vertically on medium screens */
+  .dash-charts-row {
+    flex-direction: column;
+  }
+
+  .dash-chart-card--status,
+  .dash-chart-card--priority {
+    flex: none;
+    width: 100%;
   }
 }
 
 @media (max-width: 560px) {
   .dash-stat-row {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .dash-body {
@@ -4366,10 +4463,17 @@ body {
   font-size: 0.75rem;
   font-weight: 600;
 }
-.cust-tickets-status--open     { background: var(--s-open-bg);     color: var(--s-open-text); }
-.cust-tickets-status--pending  { background: var(--s-pending-bg);  color: var(--s-pending-text); }
-.cust-tickets-status--resolved { background: var(--s-resolved-bg); color: var(--s-resolved-text); }
-.cust-tickets-status--closed   { background: var(--s-closed-bg);   color: var(--s-closed-text); }
+.cust-tickets-status--open                { background: var(--s-open-bg);                color: var(--s-open-text); }
+.cust-tickets-status--pending             { background: var(--s-pending-bg);             color: var(--s-pending-text); }
+.cust-tickets-status--resolved            { background: var(--s-resolved-bg);            color: var(--s-resolved-text); }
+.cust-tickets-status--closed              { background: var(--s-closed-bg);              color: var(--s-closed-text); }
+.cust-tickets-status--unassigned          { background: var(--s-unassigned-bg);          color: var(--s-unassigned-text); }
+.cust-tickets-status--assigned            { background: var(--s-assigned-bg);            color: var(--s-assigned-text); }
+.cust-tickets-status--in-progress         { background: var(--s-in-progress-bg);         color: var(--s-in-progress-text); }
+.cust-tickets-status--requesting-escalation { background: var(--s-requesting-escalation-bg); color: var(--s-requesting-escalation-text); }
+.cust-tickets-status--pending-client      { background: var(--s-pending-client-bg);      color: var(--s-pending-client-text); }
+.cust-tickets-status--pending-vendor      { background: var(--s-pending-vendor-bg);      color: var(--s-pending-vendor-text); }
+.cust-tickets-status--scheduled           { background: var(--s-scheduled-bg);           color: var(--s-scheduled-text); }
 
 .cust-tickets-priority--low    { color: var(--p-low-text); }
 .cust-tickets-priority--medium { color: var(--p-medium-text); }

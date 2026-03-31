@@ -264,3 +264,20 @@ CREATE INDEX IF NOT EXISTS idx_tickets_first_response_due_at
   ON tickets(first_response_due_at) WHERE first_response_due_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_tickets_resolution_due_at
   ON tickets(resolution_due_at) WHERE resolution_due_at IS NOT NULL;
+
+-- ── Migration: expanded ticket status workflow ────────────────────
+-- Replaces the original 4-value CHECK with a 9-status workflow set.
+-- Legacy values (open, pending) are retained in the constraint so existing
+-- rows remain valid — they can be migrated to the new statuses separately.
+ALTER TABLE tickets DROP CONSTRAINT IF EXISTS tickets_status_check;
+ALTER TABLE tickets ADD CONSTRAINT tickets_status_check
+  CHECK (status IN (
+    'open', 'pending',                        -- legacy (kept for existing data)
+    'unassigned', 'assigned', 'in-progress',
+    'requesting-escalation',
+    'pending-client', 'pending-vendor',
+    'scheduled', 'resolved', 'closed'
+  ));
+
+-- New tickets start as 'unassigned' (previously 'open').
+ALTER TABLE tickets ALTER COLUMN status SET DEFAULT 'unassigned';

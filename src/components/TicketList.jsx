@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useTickets } from '../context/TicketContext';
 import { useAuth } from '../context/AuthContext';
 import SlaCountdown from './SlaCountdown';
+import { STATUS_LABELS, STATUS_OPTIONS, TERMINAL_STATUSES } from '../utils/statusConfig';
 
 /* ── helpers ─────────────────────────────────────────────── */
 const PRIORITY_ORDER = { urgent: 3, high: 2, medium: 1, low: 0 };
@@ -44,7 +45,7 @@ function PriorityBadge({ priority }) {
 function StatusBadge({ status }) {
   return (
     <span className={`badge badge-${status}`}>
-      {status}
+      {STATUS_LABELS[status] ?? status}
     </span>
   );
 }
@@ -52,18 +53,20 @@ function StatusBadge({ status }) {
 /* ── stat counts ─────────────────────────────────────────── */
 function TicketStats({ tickets }) {
   const counts = useMemo(() => {
-    return tickets.reduce(
-      (acc, t) => {
-        acc[t.status] = (acc[t.status] || 0) + 1;
-        return acc;
-      },
-      { open: 0, pending: 0, resolved: 0, closed: 0 }
-    );
+    let active = 0, pending = 0, resolved = 0, closed = 0;
+    for (const t of tickets) {
+      if (t.status === 'resolved') resolved++;
+      else if (t.status === 'closed') closed++;
+      else if (t.status === 'pending-client' || t.status === 'pending-vendor' ||
+               t.status === 'requesting-escalation' || t.status === 'pending') pending++;
+      else active++;
+    }
+    return { active, pending, resolved, closed };
   }, [tickets]);
 
   const stats = [
-    { label: 'Open',     value: counts.open,     color: 'var(--s-open-dot)' },
-    { label: 'Pending',  value: counts.pending,  color: 'var(--s-pending-dot)' },
+    { label: 'Active',   value: counts.active,   color: 'var(--s-in-progress-dot)' },
+    { label: 'Pending',  value: counts.pending,  color: 'var(--s-pending-client-dot)' },
     { label: 'Resolved', value: counts.resolved, color: 'var(--s-resolved-dot)' },
     { label: 'Closed',   value: counts.closed,   color: 'var(--s-closed-dot)' },
   ];
@@ -295,10 +298,12 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
             onChange={(e) => setFilterStatus(e.target.value)}
           >
             <option value="all">All Statuses</option>
-            <option value="open">Open</option>
-            <option value="pending">Pending</option>
-            <option value="resolved">Resolved</option>
-            <option value="closed">Closed</option>
+            {STATUS_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+            {/* Legacy statuses — shown only if a ticket with that status exists */}
+            <option value="open">Open (legacy)</option>
+            <option value="pending">Pending (legacy)</option>
           </select>
 
           <label htmlFor="filter-priority" className="visually-hidden">Filter by priority</label>

@@ -3,6 +3,7 @@ import { useTickets } from '../context/TicketContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import SlaCountdown from './SlaCountdown';
+import { STATUS_OPTIONS, STATUS_LABELS, TERMINAL_STATUSES } from '../utils/statusConfig';
 
 const SUPPORT_EMAIL = 'support@company.com';
 
@@ -56,9 +57,14 @@ function formatRelativeTime(iso) {
 // ── sub-components ─────────────────────────────────────────────
 
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'];
-const STATUS_OPTIONS   = ['open', 'pending', 'resolved', 'closed'];
 
 function ControlSelect({ id, label, value, options, onChange, disabled }) {
+  // options can be strings (priority) or {value, label} objects (status)
+  const normalised = options.map((o) =>
+    typeof o === 'string'
+      ? { value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }
+      : o
+  );
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <label
@@ -81,10 +87,8 @@ function ControlSelect({ id, label, value, options, onChange, disabled }) {
         aria-label={label}
         disabled={disabled}
       >
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o.charAt(0).toUpperCase() + o.slice(1)}
-          </option>
+        {normalised.map(({ value: v, label: l }) => (
+          <option key={v} value={v}>{l}</option>
         ))}
       </select>
     </div>
@@ -418,7 +422,7 @@ function ResolutionTab({ ticket, ticketId, onUpdate }) {
     }
   }
 
-  const isAlreadyResolved = ticket.status === 'resolved' || ticket.status === 'closed';
+  const isAlreadyResolved = TERMINAL_STATUSES.includes(ticket.status);
 
   return (
     <div className="tp-tab-content tp-resolution-content">
@@ -791,7 +795,7 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
             </div>
             <div className="tp-info-row">
               <span className="tp-info-label">Status</span>
-              <span className={`badge badge-${ticket.status}`}>{ticket.status}</span>
+              <span className={`badge badge-${ticket.status}`}>{STATUS_LABELS[ticket.status] ?? ticket.status}</span>
             </div>
             <div className="tp-info-row">
               <span className="tp-info-label">Priority</span>

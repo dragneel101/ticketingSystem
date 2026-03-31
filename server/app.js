@@ -86,6 +86,11 @@ app.use('/api/customers', requireAuth, customersRouter);
 const companiesRouter = require('./routes/companies');
 app.use('/api/companies', requireAuth, companiesRouter);
 
+// ── SLA policy routes (protected; admin-only mutations) ───────
+// requireAuth applied here; individual mutation routes enforce adminOnly.
+const slaRouter = require('./routes/sla');
+app.use('/api/sla-policies', requireAuth, slaRouter);
+
 // ── SPA catch-all — must be last ─────────────────────────────
 // Any non-API request gets index.html so client-side routing works.
 app.get('*', (req, res) => {

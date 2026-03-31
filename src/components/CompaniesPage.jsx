@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useSla } from '../context/SlaContext';
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -17,9 +18,12 @@ const STATUS_LABELS = { open: 'Open', pending: 'Pending', resolved: 'Resolved', 
 // ── CompanyDetailPage ─────────────────────────────────────
 export function CompanyDetailPage({ company, onBack, onSelectTicket, onViewCustomer }) {
   const { addToast } = useToast();
+  const { policies } = useSla();
   const [customers, setCustomers] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Track current company data so SLA edits can update the header live
+  const [companyData, setCompanyData] = useState(company);
 
   useEffect(() => {
     async function load() {
@@ -46,6 +50,14 @@ export function CompanyDetailPage({ company, onBack, onSelectTicket, onViewCusto
     (t) => t.status === 'open' || t.status === 'pending'
   ).length;
 
+  // Resolve the policy name from our loaded policies list (fresher than the
+  // snapshot on the company prop, which may not have sla_policy_name set yet).
+  const effectivePolicy = policies.find((p) => p.id === companyData.sla_policy_id)
+    ?? policies.find((p) => p.is_default);
+  const policyLabel = companyData.sla_policy_id
+    ? (effectivePolicy?.name ?? 'Custom')
+    : `${effectivePolicy?.name ?? 'Default'} (default)`;
+
   return (
     <div className="admin-page">
       <div className="admin-page-header">
@@ -54,9 +66,9 @@ export function CompanyDetailPage({ company, onBack, onSelectTicket, onViewCusto
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <button className="btn-back" onClick={onBack}>&#8592; Back</button>
               <div>
-                <h1 className="admin-page-title">{company.name}</h1>
+                <h1 className="admin-page-title">{companyData.name}</h1>
                 <p className="admin-page-subtitle">
-                  {customers.length} customer{customers.length !== 1 ? 's' : ''} &middot; {tickets.length} ticket{tickets.length !== 1 ? 's' : ''}
+                  {customers.length} customer{customers.length !== 1 ? 's' : ''} &middot; {tickets.length} ticket{tickets.length !== 1 ? 's' : ''} &middot; SLA: <strong>{policyLabel}</strong>
                 </p>
               </div>
             </div>
@@ -187,11 +199,13 @@ export function CompanyDetailPage({ company, onBack, onSelectTicket, onViewCusto
 // ── AddCompanyModal ───────────────────────────────────────
 function AddCompanyModal({ onClose, onCreated }) {
   const { addToast } = useToast();
+  const { policies } = useSla();
   const [form, setForm] = useState({
     name: '',
     address: '',
     primary_contact: '',
     phone: '',
+    sla_policy_id: '',
   });
   const [loading, setLoading] = useState(false);
 
@@ -211,6 +225,7 @@ function AddCompanyModal({ onClose, onCreated }) {
           address: form.address || null,
           primary_contact: form.primary_contact || null,
           phone: form.phone || null,
+          sla_policy_id: form.sla_policy_id ? parseInt(form.sla_policy_id, 10) : null,
         }),
       });
       const data = await res.json();
@@ -283,6 +298,21 @@ function AddCompanyModal({ onClose, onCreated }) {
               placeholder="+1 555 000 0000"
             />
           </div>
+          <div className="form-field">
+            <label htmlFor="co-add-sla">SLA Policy</label>
+            <select
+              id="co-add-sla"
+              value={form.sla_policy_id}
+              onChange={(e) => set('sla_policy_id', e.target.value)}
+            >
+              <option value="">Use default policy</option>
+              {policies.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.is_default ? ' (default)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="modal-footer">
             <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={loading}>
@@ -298,11 +328,13 @@ function AddCompanyModal({ onClose, onCreated }) {
 // ── EditCompanyModal ──────────────────────────────────────
 function EditCompanyModal({ company, onClose, onUpdated }) {
   const { addToast } = useToast();
+  const { policies } = useSla();
   const [form, setForm] = useState({
     name: company.name ?? '',
     address: company.address ?? '',
     primary_contact: company.primary_contact ?? '',
     phone: company.phone ?? '',
+    sla_policy_id: company.sla_policy_id ?? '',
   });
   const [loading, setLoading] = useState(false);
 
@@ -322,6 +354,7 @@ function EditCompanyModal({ company, onClose, onUpdated }) {
           address: form.address || null,
           primary_contact: form.primary_contact || null,
           phone: form.phone || null,
+          sla_policy_id: form.sla_policy_id ? parseInt(form.sla_policy_id, 10) : null,
         }),
       });
       const data = await res.json();
@@ -394,6 +427,21 @@ function EditCompanyModal({ company, onClose, onUpdated }) {
               placeholder="+1 555 000 0000"
             />
           </div>
+          <div className="form-field">
+            <label htmlFor="co-edit-sla">SLA Policy</label>
+            <select
+              id="co-edit-sla"
+              value={form.sla_policy_id}
+              onChange={(e) => set('sla_policy_id', e.target.value)}
+            >
+              <option value="">Use default policy</option>
+              {policies.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.is_default ? ' (default)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="modal-footer">
             <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn-primary" disabled={loading}>
@@ -410,6 +458,7 @@ function EditCompanyModal({ company, onClose, onUpdated }) {
 export default function CompaniesPage({ onSelectCompany, onSelectTicket }) {
   const { addToast } = useToast();
   const { user } = useAuth();
+  const { policies } = useSla();
   const isAdmin = user?.role === 'admin';
 
   const [companies, setCompanies] = useState([]);
@@ -524,6 +573,7 @@ export default function CompaniesPage({ onSelectCompany, onSelectTicket }) {
                   <th>Address</th>
                   <th>Primary Contact</th>
                   <th>Phone</th>
+                  <th>SLA Policy</th>
                   <th>Customers</th>
                   <th>Open Tickets</th>
                   <th>Actions</th>
@@ -545,6 +595,7 @@ export default function CompaniesPage({ onSelectCompany, onSelectTicket }) {
                       onSelectCompany={onSelectCompany}
                       onEdit={() => setEditingCompany(row)}
                       onDelete={handleDelete}
+                      defaultPolicyName={policies.find((p) => p.is_default)?.name}
                     />
                   ))
                 )}
@@ -576,7 +627,7 @@ export default function CompaniesPage({ onSelectCompany, onSelectTicket }) {
 }
 
 // ── CompanyRow ────────────────────────────────────────────
-function CompanyRow({ row, isAdmin, onSelectCompany, onEdit, onDelete }) {
+function CompanyRow({ row, isAdmin, onSelectCompany, onEdit, onDelete, defaultPolicyName }) {
   const [deleteState, setDeleteState] = useState('idle'); // 'idle' | 'confirming'
 
   const addressDisplay = row.address
@@ -591,6 +642,13 @@ function CompanyRow({ row, isAdmin, onSelectCompany, onEdit, onDelete }) {
       <td style={{ color: 'var(--gray-500)', fontSize: '0.8125rem' }}>{addressDisplay}</td>
       <td style={{ color: 'var(--gray-600)' }}>{row.primary_contact || <span className="cust-empty">&mdash;</span>}</td>
       <td style={{ color: 'var(--gray-600)' }}>{row.phone || <span className="cust-empty">&mdash;</span>}</td>
+      <td>
+        {row.sla_policy_id ? (
+          <span className="co-sla-badge co-sla-badge--custom">{row.sla_policy_name ?? 'Custom'}</span>
+        ) : (
+          <span className="co-sla-badge co-sla-badge--default">{defaultPolicyName ?? 'Default'}</span>
+        )}
+      </td>
       <td>
         <span className={`cust-ticket-count${row.customer_count > 0 ? ' cust-ticket-count--has' : ''}`}>
           {row.customer_count}

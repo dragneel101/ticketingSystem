@@ -213,3 +213,54 @@ ALTER TABLE tickets   ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES com
 
 CREATE INDEX IF NOT EXISTS idx_customers_company_id ON customers(company_id);
 CREATE INDEX IF NOT EXISTS idx_tickets_company_id   ON tickets(company_id);
+
+-- ── Migration: SLA policies ───────────────────────────────────
+-- One row per named policy. Times are stored as minutes so deadline
+-- arithmetic is simple: base_time + minutes * 60_000 ms in JS.
+-- is_default: exactly one row should be TRUE at any time — enforced
+-- in application logic (transactional swap) rather than a DB constraint
+-- so re-running this migration on an existing DB is safe.
+CREATE TABLE IF NOT EXISTS sla_policies (
+  id                        SERIAL PRIMARY KEY,
+  name                      VARCHAR(255) NOT NULL UNIQUE,
+  -- Per-priority first-response targets (NULL = no SLA for that priority)
+  response_low_minutes      INTEGER,
+  response_medium_minutes   INTEGER,
+  response_high_minutes     INTEGER,
+  response_urgent_minutes   INTEGER,
+  -- Per-priority resolution targets
+  resolution_low_minutes    INTEGER,
+  resolution_medium_minutes INTEGER,
+  resolution_high_minutes   INTEGER,
+  resolution_urgent_minutes INTEGER,
+  is_default                BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Seed a sensible default policy (response: 24h/8h/4h/1h; resolution: 7d/2d/1d/8h)
+INSERT INTO sla_policies (
+  name, is_default,
+  response_low_minutes, response_medium_minutes, response_high_minutes, response_urgent_minutes,
+  resolution_low_minutes, resolution_medium_minutes, resolution_high_minutes, resolution_urgent_minutes
+) VALUES (
+  'Default SLA', TRUE,
+  1440, 480, 240, 60,
+  10080, 2880, 1440, 480
+) ON CONFLICT (name) DO NOTHING;
+
+-- Link companies to a custom SLA policy (null = use the default policy)
+ALTER TABLE companies
+  ADD COLUMN IF NOT EXISTS sla_policy_id INTEGER REFERENCES sla_policies(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_companies_sla_policy_id ON companies(sla_policy_id);
+
+-- SLA deadline columns on tickets — nullable so pre-migration tickets show
+-- "no SLA" in the UI rather than appearing as permanently breached.
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS first_response_due_at TIMESTAMPTZ;
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS resolution_due_at     TIMESTAMPTZ;
+
+-- Partial indexes only cover rows that have deadlines (the common query path).
+CREATE INDEX IF NOT EXISTS idx_tickets_first_response_due_at
+  ON tickets(first_response_due_at) WHERE first_response_due_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_tickets_resolution_due_at
+  ON tickets(resolution_due_at) WHERE resolution_due_at IS NOT NULL;

@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TicketProvider } from './context/TicketContext';
 import { ToastProvider, useToast } from './context/ToastContext';
+import { SlaProvider } from './context/SlaContext';
 import TicketList from './components/TicketList';
 import TicketPage from './components/TicketPage';
 import NewTicketForm from './components/NewTicketForm';
@@ -249,9 +250,11 @@ function AuthenticatedApp() {
 
   return (
     <ToastProvider>
-      <TicketProvider>
-        <AppShell />
-      </TicketProvider>
+      <SlaProvider>
+        <TicketProvider>
+          <AppShell />
+        </TicketProvider>
+      </SlaProvider>
     </ToastProvider>
   );
 }

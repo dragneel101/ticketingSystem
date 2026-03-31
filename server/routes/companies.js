@@ -18,14 +18,16 @@ router.get('/', async (req, res) => {
 
     const { rows } = await pool.query(
       `SELECT co.*,
+              sp.name                                                                   AS sla_policy_name,
               COUNT(DISTINCT c.id)::int                                                AS customer_count,
               COUNT(DISTINCT t.id)::int                                                AS ticket_count,
               COUNT(DISTINCT t.id) FILTER (WHERE t.status IN ('open','pending'))::int  AS open_ticket_count
        FROM companies co
-       LEFT JOIN customers c ON c.company_id = co.id
-       LEFT JOIN tickets   t ON t.company_id = co.id
+       LEFT JOIN sla_policies sp ON sp.id = co.sla_policy_id
+       LEFT JOIN customers    c  ON c.company_id = co.id
+       LEFT JOIN tickets      t  ON t.company_id = co.id
        ${where}
-       GROUP BY co.id
+       GROUP BY co.id, sp.name
        ORDER BY co.name ASC`,
       values
     );
@@ -62,25 +64,28 @@ router.get('/suggest', async (req, res) => {
 });
 
 // ── POST /api/companies ───────────────────────────────────
-// Body: { name, address?, primary_contact?, phone? }
+// Body: { name, address?, primary_contact?, phone?, sla_policy_id? }
 // 409 on duplicate name.
 router.post('/', async (req, res) => {
-  const { name, address, primary_contact, phone } = req.body;
+  const { name, address, primary_contact, phone, sla_policy_id } = req.body;
 
   if (!name?.trim()) {
     return res.status(400).json({ error: 'name is required' });
   }
 
+  const policyId = sla_policy_id != null ? parseInt(sla_policy_id, 10) : null;
+
   try {
     const { rows } = await pool.query(
-      `INSERT INTO companies (name, address, primary_contact, phone)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO companies (name, address, primary_contact, phone, sla_policy_id)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
       [
         name.trim(),
         address?.trim() || null,
         primary_contact?.trim() || null,
         phone?.trim() || null,
+        isNaN(policyId) ? null : policyId,
       ]
     );
     res.status(201).json({ ...rows[0], customer_count: 0, ticket_count: 0, open_ticket_count: 0 });
@@ -94,7 +99,7 @@ router.post('/', async (req, res) => {
 });
 
 // ── PATCH /api/companies/:id ──────────────────────────────
-// Accepts any subset of { name, address, primary_contact, phone }.
+// Accepts any subset of { name, address, primary_contact, phone, sla_policy_id }.
 router.patch('/:id', async (req, res) => {
   const allowed = ['name', 'address', 'primary_contact', 'phone'];
   const updates = {};
@@ -103,6 +108,12 @@ router.patch('/:id', async (req, res) => {
     if (req.body[key] !== undefined) {
       updates[key] = req.body[key] === null ? null : String(req.body[key]).trim() || null;
     }
+  }
+
+  // sla_policy_id needs separate handling: it accepts null (clear) or a positive integer.
+  if (req.body.sla_policy_id !== undefined) {
+    const raw = req.body.sla_policy_id;
+    updates.sla_policy_id = raw === null ? null : parseInt(raw, 10) || null;
   }
 
   if (!Object.keys(updates).length) {

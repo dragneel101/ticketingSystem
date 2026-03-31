@@ -4528,3 +4528,248 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ============================================================
+   SLA SYSTEM
+   ============================================================ */
+
+/* ── SLA colour tokens ─────────────────────────────────────── */
+:root {
+  --sla-ok-bg:           #e8f8ef;
+  --sla-ok-text:         #1a7a44;
+  --sla-warn-bg:         #fffbea;
+  --sla-warn-text:       #92640a;
+  --sla-breach-bg:       #fff1f1;
+  --sla-breach-text:     #c0392b;
+  --sla-breach-border:   rgba(192, 57, 43, 0.30);
+}
+
+/* ── SLA countdown chip ────────────────────────────────────── */
+.sla-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+.sla-chip--ok     { background: var(--sla-ok-bg);     color: var(--sla-ok-text); }
+.sla-chip--warn   { background: var(--sla-warn-bg);   color: var(--sla-warn-text); }
+.sla-chip--breach { background: var(--sla-breach-bg); color: var(--sla-breach-text); }
+
+/* ── Breached ticket row highlight ─────────────────────────── */
+.tl-row--sla-breached {
+  border-left: 3px solid var(--sla-breach-text);
+}
+
+/* ── SLA column cell in ticket list ───────────────────────── */
+.tl-row-sla {
+  display: flex;
+  align-items: center;
+  min-width: 80px;
+}
+
+/* ── SLA admin panel ───────────────────────────────────────── */
+.sla-admin-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sla-table-wrap {
+  overflow-x: auto;
+}
+
+.sla-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.sla-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gray-500);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--gray-200);
+}
+.sla-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--gray-100);
+  color: var(--gray-700);
+  vertical-align: middle;
+}
+.sla-row--default td {
+  background: var(--brand-light);
+}
+.sla-td-name {
+  font-weight: 500;
+  color: var(--gray-800);
+}
+.sla-badge-default {
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--brand-light2);
+  color: var(--brand);
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+.sla-btn-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--brand);
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  transition: background var(--t-fast);
+}
+.sla-btn-link:hover { background: var(--brand-light); }
+.sla-btn-danger { color: var(--sla-breach-text); }
+.sla-btn-danger:hover { background: var(--sla-breach-bg); }
+.sla-btn-danger--confirm { background: var(--sla-breach-bg); font-weight: 700; }
+
+.sla-empty-msg {
+  font-size: 13px;
+  color: var(--gray-500);
+  margin: 0;
+}
+.sla-add-btn {
+  align-self: flex-start;
+}
+
+/* ── SLA create/edit form ──────────────────────────────────── */
+.sla-form {
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-md);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sla-form-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-800);
+  margin: 0;
+}
+.sla-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sla-form-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gray-500);
+}
+.sla-form-input {
+  padding: 7px 10px;
+  font-size: 13px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-sm);
+  color: var(--gray-800);
+  background: #fff;
+  transition: border-color var(--t-fast);
+  width: 100%;
+  box-sizing: border-box;
+}
+.sla-form-input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand-light);
+}
+.sla-form-input--num {
+  width: 100px;
+}
+.sla-form-hint {
+  font-size: 12px;
+  color: var(--gray-500);
+  margin: 0;
+}
+.sla-times-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  width: auto;
+}
+.sla-times-table th {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gray-500);
+  padding: 4px 12px 4px 0;
+  text-align: left;
+}
+.sla-times-table td {
+  padding: 5px 12px 5px 0;
+  vertical-align: middle;
+}
+.sla-form-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--gray-700);
+  cursor: pointer;
+}
+.sla-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Utility button variants (sm) ──────────────────────────── */
+.btn--sm {
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: var(--r-sm);
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.btn--brand {
+  background: var(--brand);
+  color: #fff;
+}
+.btn--brand:hover:not(:disabled) { background: var(--brand-hover); }
+.btn--brand:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn--ghost {
+  background: var(--gray-100);
+  color: var(--gray-600);
+  border: 1px solid var(--gray-200);
+}
+.btn--ghost:hover { background: var(--gray-200); }
+
+/* ── Settings loading state ────────────────────────────────── */
+.settings-loading {
+  font-size: 13px;
+  color: var(--gray-500);
+  margin: 0;
+}
+
+/* ── Company SLA policy badge (list column) ────────────────── */
+.co-sla-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.co-sla-badge--default {
+  background: var(--gray-100);
+  color: var(--gray-500);
+}
+.co-sla-badge--custom {
+  background: var(--brand-light2);
+  color: var(--brand);
+}

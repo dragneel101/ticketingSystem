@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useTickets } from '../context/TicketContext';
 import { useAuth } from '../context/AuthContext';
+import SlaCountdown from './SlaCountdown';
 
 /* ── helpers ─────────────────────────────────────────────── */
 const PRIORITY_ORDER = { urgent: 3, high: 2, medium: 1, low: 0 };
@@ -171,6 +172,9 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
         } else if (sortKey === 'createdAt') {
           aVal = new Date(a.createdAt).getTime();
           bVal = new Date(b.createdAt).getTime();
+        } else if (sortKey === 'resolutionDueAt') {
+          aVal = a.resolutionDueAt ? new Date(a.resolutionDueAt).getTime() : Infinity;
+          bVal = b.resolutionDueAt ? new Date(b.resolutionDueAt).getTime() : Infinity;
         } else {
           aVal = (a[sortKey] || '').toLowerCase();
           bVal = (b[sortKey] || '').toLowerCase();
@@ -348,6 +352,7 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
           <ColHeader label="Assignee" colKey="assigneeName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
           <ColHeader label="Priority / Status" colKey="priority" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
           <ColHeader label="Created" colKey="createdAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+          <ColHeader label="SLA" colKey="resolutionDueAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
         </div>
       )}
 
@@ -403,10 +408,15 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
 
 /* ── ticket row ──────────────────────────────────────────── */
 function TicketRow({ ticket, isActive, onClick }) {
+  const now = Date.now();
+  const isBreached =
+    (ticket.resolutionDueAt    && new Date(ticket.resolutionDueAt).getTime()    < now) ||
+    (ticket.firstResponseDueAt && new Date(ticket.firstResponseDueAt).getTime() < now);
+
   return (
     <div
       id={`ticket-${ticket.id}`}
-      className={`tl-row${isActive ? ' tl-row--active' : ''}`}
+      className={`tl-row${isActive ? ' tl-row--active' : ''}${isBreached ? ' tl-row--sla-breached' : ''}`}
       onClick={onClick}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -452,6 +462,11 @@ function TicketRow({ ticket, isActive, onClick }) {
 
       {/* Date */}
       <span className="tl-row-date">{formatDate(ticket.createdAt)}</span>
+
+      {/* SLA countdown */}
+      <span className="tl-row-sla">
+        <SlaCountdown dueAt={ticket.resolutionDueAt} compact />
+      </span>
 
       {/* Arrow cue */}
       <svg className="tl-row-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">

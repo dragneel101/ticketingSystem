@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
+const { computeSlaDeadlines } = require('../lib/slaUtils');
 
 // ── helpers ───────────────────────────────────────────────────
 
@@ -45,6 +46,9 @@ function formatTicket(row, messages = [], events = []) {
       actorEmail: e.actor_email ?? null,
       createdAt: e.created_at,
     })),
+    // SLA deadlines — null for tickets created before the SLA migration.
+    firstResponseDueAt: row.first_response_due_at ?? null,
+    resolutionDueAt:    row.resolution_due_at     ?? null,
   };
 }
 
@@ -169,6 +173,32 @@ router.post('/', async (req, res) => {
       ]
     );
     const ticket = rows[0];
+
+    // ── Compute and store SLA deadlines ──────────────────────
+    // Look up the effective SLA policy: company-specific if set, otherwise default.
+    const { rows: policyRows } = await client.query(
+      `SELECT sp.*
+       FROM sla_policies sp
+       WHERE sp.id = COALESCE(
+         (SELECT sla_policy_id FROM companies WHERE id = $1),
+         (SELECT id FROM sla_policies WHERE is_default = TRUE LIMIT 1)
+       )
+       LIMIT 1`,
+      [companyId || null]
+    );
+    const { firstResponseDueAt, resolutionDueAt } = computeSlaDeadlines(
+      ticket.priority,
+      policyRows[0] ?? null,
+      ticket.created_at
+    );
+    if (firstResponseDueAt || resolutionDueAt) {
+      await client.query(
+        'UPDATE tickets SET first_response_due_at = $1, resolution_due_at = $2 WHERE id = $3',
+        [firstResponseDueAt, resolutionDueAt, ticket.id]
+      );
+      ticket.first_response_due_at = firstResponseDueAt;
+      ticket.resolution_due_at     = resolutionDueAt;
+    }
 
     let messages = [];
     if (initialMessage?.trim()) {
@@ -319,11 +349,32 @@ router.patch('/:id', async (req, res) => {
       ]);
     }
 
-    // priority changed?
+    // priority changed? — recalculate SLA deadlines for the new priority
     if (updates.priority !== undefined && updates.priority !== old.priority) {
       await client.query(eventInsert, [
         ...baseParams, 'priority_changed', old.priority, updates.priority,
       ]);
+
+      // Fetch the effective SLA policy and recompute deadlines.
+      const { rows: policyRows } = await client.query(
+        `SELECT sp.*
+         FROM sla_policies sp
+         WHERE sp.id = COALESCE(
+           (SELECT sla_policy_id FROM companies WHERE id = $1),
+           (SELECT id FROM sla_policies WHERE is_default = TRUE LIMIT 1)
+         )
+         LIMIT 1`,
+        [old.company_id ?? null]
+      );
+      const { firstResponseDueAt, resolutionDueAt } = computeSlaDeadlines(
+        updates.priority,
+        policyRows[0] ?? null,
+        old.created_at
+      );
+      await client.query(
+        'UPDATE tickets SET first_response_due_at = $1, resolution_due_at = $2 WHERE id = $3',
+        [firstResponseDueAt, resolutionDueAt, old.id]
+      );
     }
 
     // assigned_to changed?

@@ -1,4 +1,5 @@
 import PasswordPolicyForm from './PasswordPolicyForm';
+import SlaAdminPanel from './SlaAdminPanel';
 
 // AdminConfigPage renders PasswordPolicyForm in "inline" mode — no modal chrome.
 //
@@ -31,6 +32,13 @@ export default function AdminConfigPage() {
             <div className="inline-form-host">
               <PasswordPolicyForm onClose={() => {}} />
             </div>
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <h2 className="settings-section-title">SLA Policies</h2>
+          <div className="settings-card">
+            <SlaAdminPanel />
           </div>
         </section>
       </div>

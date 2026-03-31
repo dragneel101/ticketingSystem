@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTickets } from '../context/TicketContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import SlaCountdown from './SlaCountdown';
 
 const SUPPORT_EMAIL = 'support@company.com';
 
@@ -821,6 +822,18 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
                 {(ticket.messages || []).filter((m) => m.type !== 'note').length}
               </span>
             </div>
+            {ticket.firstResponseDueAt && (
+              <div className="tp-info-row">
+                <span className="tp-info-label">SLA Response</span>
+                <SlaCountdown dueAt={ticket.firstResponseDueAt} />
+              </div>
+            )}
+            {ticket.resolutionDueAt && (
+              <div className="tp-info-row">
+                <span className="tp-info-label">SLA Resolution</span>
+                <SlaCountdown dueAt={ticket.resolutionDueAt} />
+              </div>
+            )}
           </div>
 
         </aside>

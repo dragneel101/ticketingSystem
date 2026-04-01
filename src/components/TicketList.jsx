@@ -1,8 +1,8 @@
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useTickets } from '../context/TicketContext';
 import { useAuth } from '../context/AuthContext';
 import SlaCountdown from './SlaCountdown';
-import { STATUS_LABELS, STATUS_OPTIONS, TERMINAL_STATUSES } from '../utils/statusConfig';
+import { STATUS_LABELS, STATUS_OPTIONS } from '../utils/statusConfig';
 import { useBoards } from '../context/BoardContext';
 
 /* ── helpers ─────────────────────────────────────────────── */
@@ -58,8 +58,10 @@ function TicketStats({ tickets }) {
     for (const t of tickets) {
       if (t.status === 'resolved') resolved++;
       else if (t.status === 'closed') closed++;
-      else if (t.status === 'pending-client' || t.status === 'pending-vendor' ||
-               t.status === 'requesting-escalation' || t.status === 'pending') pending++;
+      else if (
+        t.status === 'pending-client' || t.status === 'pending-vendor' ||
+        t.status === 'requesting-escalation' || t.status === 'pending'
+      ) pending++;
       else active++;
     }
     return { active, pending, resolved, closed };
@@ -89,27 +91,70 @@ function TicketStats({ tickets }) {
   );
 }
 
-/* ── sortable column header button ──────────────────────── */
-function ColHeader({ label, colKey, sortKey, sortDir, onSort }) {
-  const active = sortKey === colKey;
+/* ── column definitions ──────────────────────────────────── */
+const DEFAULT_COLUMNS = [
+  'id', 'subject', 'customerName', 'status', 'priority',
+  'assigneeName', 'boardName', 'createdAt', 'resolutionDueAt',
+];
+
+const COLUMN_META = {
+  id:              { label: 'Ref',      width: '90px'  },
+  subject:         { label: 'Subject',  width: '1fr'   },
+  customerName:    { label: 'Customer', width: '140px' },
+  status:          { label: 'Status',   width: '140px' },
+  priority:        { label: 'Priority', width: '90px'  },
+  assigneeName:    { label: 'Assignee', width: '130px' },
+  boardName:       { label: 'Board',    width: '110px' },
+  createdAt:       { label: 'Created',  width: '90px'  },
+  resolutionDueAt: { label: 'SLA',      width: '110px' },
+};
+
+/* ── sort comparators ────────────────────────────────────── */
+function compareTickets(a, b, key, dir) {
+  let av, bv;
+  switch (key) {
+    case 'id':
+      av = ticketRefNum(a.id); bv = ticketRefNum(b.id);
+      return dir === 'asc' ? av - bv : bv - av;
+    case 'priority':
+      av = PRIORITY_ORDER[a.priority] ?? -1;
+      bv = PRIORITY_ORDER[b.priority] ?? -1;
+      return dir === 'asc' ? av - bv : bv - av;
+    case 'createdAt':
+    case 'resolutionDueAt': {
+      const ad = a[key] ? new Date(a[key]).getTime() : (dir === 'asc' ? Infinity : -Infinity);
+      const bd = b[key] ? new Date(b[key]).getTime() : (dir === 'asc' ? Infinity : -Infinity);
+      return dir === 'asc' ? ad - bd : bd - ad;
+    }
+    default:
+      av = (a[key] ?? '').toString().toLowerCase();
+      bv = (b[key] ?? '').toString().toLowerCase();
+      const cmp = av.localeCompare(bv);
+      return dir === 'asc' ? cmp : -cmp;
+  }
+}
+
+/* ── sort chevron icons ──────────────────────────────────── */
+function SortIcons({ colKey, sortKey, sortDir }) {
+  const isActive = colKey === sortKey;
+  const upActive   = isActive && sortDir === 'asc';
+  const downActive = isActive && sortDir === 'desc';
+
   return (
-    <button
-      className={`tl-col-btn${active ? ' tl-col-btn--active' : ''}`}
-      onClick={() => onSort(colKey)}
-      aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-    >
-      {label}
-      <svg className="tl-sort-icon" width="8" height="10" viewBox="0 0 8 10" fill="none" aria-hidden="true">
-        <path
-          d="M4 1L1.5 4h5L4 1z"
-          fill={active && sortDir === 'asc' ? 'currentColor' : 'var(--gray-400)'}
-        />
-        <path
-          d="M4 9L1.5 6h5L4 9z"
-          fill={active && sortDir === 'desc' ? 'currentColor' : 'var(--gray-400)'}
-        />
+    <span className="tl-th-sort-icons" aria-hidden="true">
+      <svg
+        className={`tl-th-chevron ${upActive ? 'tl-th-chevron--active' : ''}`}
+        width="8" height="5" viewBox="0 0 8 5" fill="none"
+      >
+        <path d="M1 4l3-3 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
-    </button>
+      <svg
+        className={`tl-th-chevron ${downActive ? 'tl-th-chevron--active' : ''}`}
+        width="8" height="5" viewBox="0 0 8 5" fill="none"
+      >
+        <path d="M1 1l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </span>
   );
 }
 
@@ -118,25 +163,24 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
   const { tickets, meta, loadMoreTickets } = useTickets();
   const { user } = useAuth();
   const { boards } = useBoards();
-  const [filterStatus, setFilterStatus] = useState('all');
   const [loadingMore, setLoadingMore] = useState(false);
-  const [filterPriority, setFilterPriority] = useState('all');
-  const [filterBoard, setFilterBoard] = useState('all');
-  const [sortKey, setSortKey] = useState(null);
-  const [sortDir, setSortDir] = useState('asc');
-  const [filterAssignee, setFilterAssignee] = useState('all');
-  const [agents, setAgents] = useState([]);
-  const [search, setSearch] = useState('');
-  const listRef = useRef(null);
 
-  function handleSort(key) {
-    if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortKey(key);
-      setSortDir('asc');
-    }
-  }
+  /* filters */
+  const [filterPriority, setFilterPriority] = useState('all');
+  const [filterStatus,   setFilterStatus]   = useState('all');
+  const [filterBoard,    setFilterBoard]    = useState('all');
+  const [filterAssignee, setFilterAssignee] = useState('all');
+  const [search,         setSearch]         = useState('');
+  const [agents,         setAgents]         = useState([]);
+
+  /* table state */
+  const [colOrder, setColOrder]     = useState(DEFAULT_COLUMNS);
+  const [dragCol,  setDragCol]      = useState(null);
+  const [dragOver, setDragOver]     = useState(null);
+  const [sortKey,  setSortKey]      = useState('id');
+  const [sortDir,  setSortDir]      = useState('asc');
+
+  const tableRef = useRef(null);
 
   useEffect(() => {
     fetch('/api/auth/agents')
@@ -145,17 +189,18 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
       .catch(() => {});
   }, []);
 
+  /* ── filter ── */
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const result = tickets.filter((t) => {
-      const statusOk = filterStatus === 'all' || t.status === filterStatus;
+    return tickets.filter((t) => {
       const priorityOk = filterPriority === 'all' || t.priority === filterPriority;
-      const boardOk = filterBoard === 'all'
+      const statusOk   = filterStatus   === 'all' || t.status   === filterStatus;
+      const boardOk    = filterBoard    === 'all'
         ? true
         : filterBoard === 'none'
           ? (t.boardId === null || t.boardId === undefined)
           : t.boardId === parseInt(filterBoard, 10);
-      const searchOk = !q ||
+      const searchOk   = !q ||
         t.subject.toLowerCase().includes(q) ||
         t.customerEmail.toLowerCase().includes(q);
 
@@ -168,59 +213,99 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
         assigneeOk = t.assignedTo === parseInt(filterAssignee, 10);
       }
 
-      return statusOk && priorityOk && boardOk && searchOk && assigneeOk;
+      return priorityOk && statusOk && boardOk && searchOk && assigneeOk;
     });
+  }, [tickets, filterPriority, filterStatus, filterBoard, filterAssignee, search, user?.id]);
 
-    if (sortKey) {
-      result.sort((a, b) => {
-        let aVal, bVal;
-        if (sortKey === 'id') {
-          aVal = ticketRefNum(a.id);
-          bVal = ticketRefNum(b.id);
-        } else if (sortKey === 'priority') {
-          aVal = PRIORITY_ORDER[a.priority] ?? 0;
-          bVal = PRIORITY_ORDER[b.priority] ?? 0;
-        } else if (sortKey === 'createdAt') {
-          aVal = new Date(a.createdAt).getTime();
-          bVal = new Date(b.createdAt).getTime();
-        } else if (sortKey === 'resolutionDueAt') {
-          aVal = a.resolutionDueAt ? new Date(a.resolutionDueAt).getTime() : Infinity;
-          bVal = b.resolutionDueAt ? new Date(b.resolutionDueAt).getTime() : Infinity;
-        } else {
-          aVal = (a[sortKey] || '').toLowerCase();
-          bVal = (b[sortKey] || '').toLowerCase();
-        }
-        if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
-        return 0;
-      });
+  /* ── sort ── */
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => compareTickets(a, b, sortKey, sortDir));
+    return arr;
+  }, [filtered, sortKey, sortDir]);
+
+  /* ── column sort click ── */
+  function handleColSort(key) {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir('asc');
+    } else if (sortDir === 'asc') {
+      setSortDir('desc');
+    } else {
+      // Third click: clear sort back to default (ref asc)
+      setSortKey('id');
+      setSortDir('asc');
     }
+  }
 
-    return result;
-  }, [tickets, filterStatus, filterPriority, filterBoard, filterAssignee, search, user?.id, sortKey, sortDir]);
+  /* ── drag-to-reorder ── */
+  const handleDragStart = useCallback((key) => {
+    setDragCol(key);
+  }, []);
 
-  const handleListKeyDown = useCallback((e) => {
+  const handleDragOver = useCallback((e, key) => {
+    e.preventDefault();
+    if (key !== dragCol) setDragOver(key);
+  }, [dragCol]);
+
+  const handleDrop = useCallback((e, targetKey) => {
+    e.preventDefault();
+    if (!dragCol || dragCol === targetKey) return;
+    setColOrder((prev) => {
+      const arr = [...prev];
+      const fromIdx = arr.indexOf(dragCol);
+      const toIdx   = arr.indexOf(targetKey);
+      arr.splice(fromIdx, 1);
+      arr.splice(toIdx, 0, dragCol);
+      return arr;
+    });
+    setDragCol(null);
+    setDragOver(null);
+  }, [dragCol]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragCol(null);
+    setDragOver(null);
+  }, []);
+
+  /* ── keyboard navigation ── */
+  const handleTableKeyDown = useCallback((e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     e.preventDefault();
-
-    if (filtered.length === 0) return;
-
-    const currentIndex = filtered.findIndex((t) => t.id === selectedId);
-    let nextIndex;
-
-    if (e.key === 'ArrowDown') {
-      nextIndex = currentIndex < filtered.length - 1 ? currentIndex + 1 : 0;
+    const currentIdx = sorted.findIndex((t) => t.id === selectedId);
+    let nextIdx;
+    if (currentIdx === -1) {
+      nextIdx = e.key === 'ArrowDown' ? 0 : sorted.length - 1;
     } else {
-      nextIndex = currentIndex > 0 ? currentIndex - 1 : filtered.length - 1;
+      nextIdx = e.key === 'ArrowDown'
+        ? Math.min(currentIdx + 1, sorted.length - 1)
+        : Math.max(currentIdx - 1, 0);
     }
+    if (sorted[nextIdx]) {
+      onSelect(sorted[nextIdx].id);
+      // scroll selected row into view
+      const row = tableRef.current?.querySelector(`[data-ticket-id="${sorted[nextIdx].id}"]`);
+      row?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [sorted, selectedId, onSelect]);
 
-    const nextId = filtered[nextIndex].id;
-    onSelect(nextId);
+  /* ── filters state ── */
+  const hasActiveFilters =
+    filterPriority !== 'all' ||
+    filterStatus   !== 'all' ||
+    filterBoard    !== 'all' ||
+    filterAssignee !== 'all' ||
+    search.trim() !== '';
 
-    const card = listRef.current?.querySelector(`#ticket-${nextId}`);
-    card?.focus();
-  }, [filtered, selectedId, onSelect]);
+  function clearFilters() {
+    setFilterPriority('all');
+    setFilterStatus('all');
+    setFilterBoard('all');
+    setFilterAssignee('all');
+    setSearch('');
+  }
 
+  /* ── load more ── */
   async function handleLoadMore() {
     setLoadingMore(true);
     try {
@@ -230,23 +315,78 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
     }
   }
 
-  const hasActiveFilters =
-    filterStatus !== 'all' ||
-    filterPriority !== 'all' ||
-    filterBoard !== 'all' ||
-    filterAssignee !== 'all' ||
-    search.trim() !== '';
-
-  function clearFilters() {
-    setFilterStatus('all');
-    setFilterPriority('all');
-    setFilterBoard('all');
-    setFilterAssignee('all');
-    setSearch('');
+  /* ── cell renderers ── */
+  function renderCell(ticket, key) {
+    switch (key) {
+      case 'id':
+        return (
+          <span className="tl-td-ref">{ticket.id}</span>
+        );
+      case 'subject':
+        return (
+          <span className="tl-td-subject" title={ticket.subject}>{ticket.subject}</span>
+        );
+      case 'customerName':
+        return (
+          <span className="tl-td-customer" title={`${ticket.customerName ?? ''} · ${ticket.customerEmail}`}>
+            {ticket.customerName ?? ticket.customerEmail}
+          </span>
+        );
+      case 'status':
+        return <StatusBadge status={ticket.status} />;
+      case 'priority':
+        return <PriorityBadge priority={ticket.priority} />;
+      case 'assigneeName':
+        return ticket.assignedTo ? (
+          <span className="tl-td-assignee">
+            <span className="tl-td-avatar" aria-label={`Assigned to ${ticket.assigneeName}`}>
+              {initials(ticket.assigneeName)}
+            </span>
+            <span className="tl-td-assignee-name" title={ticket.assigneeName}>
+              {ticket.assigneeName}
+            </span>
+          </span>
+        ) : (
+          <span className="tl-td-unassigned">—</span>
+        );
+      case 'boardName':
+        return ticket.boardName ? (
+          <span className="tl-board-badge">{ticket.boardName}</span>
+        ) : (
+          <span className="tl-td-dash">—</span>
+        );
+      case 'createdAt':
+        return (
+          <span className="tl-td-date" title={new Date(ticket.createdAt).toLocaleString()}>
+            {formatDate(ticket.createdAt)}
+          </span>
+        );
+      case 'resolutionDueAt': {
+        const dueAt = ticket.resolutionDueAt ?? ticket.firstResponseDueAt ?? null;
+        return dueAt
+          ? <SlaCountdown dueAt={dueAt} compact />
+          : <span className="tl-td-dash">—</span>;
+      }
+      default:
+        return null;
+    }
   }
+
+  /* ── SLA breach check ── */
+  function isBreached(ticket) {
+    const now = Date.now();
+    return (
+      (ticket.resolutionDueAt    && new Date(ticket.resolutionDueAt).getTime()    < now) ||
+      (ticket.firstResponseDueAt && new Date(ticket.firstResponseDueAt).getTime() < now)
+    );
+  }
+
+  /* ── column template string for <colgroup> ── */
+  const colWidths = colOrder.map((k) => COLUMN_META[k]?.width ?? '100px');
 
   return (
     <div className="tl-page" aria-label="Ticket list">
+
       {/* ── Page header ── */}
       <div className="tl-header">
         <div className="tl-header-title-row">
@@ -265,9 +405,8 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
         </button>
       </div>
 
-      {/* ── Toolbar: search + filters ── */}
+      {/* ── Toolbar ── */}
       <div className="tl-toolbar" role="search" aria-label="Search and filter tickets">
-        {/* Search */}
         <div className="tl-search-wrap">
           <svg className="tl-search-icon" width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true">
             <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.4" />
@@ -298,7 +437,6 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
           )}
         </div>
 
-        {/* Selects */}
         <div className="tl-filters">
           <label htmlFor="filter-status" className="visually-hidden">Filter by status</label>
           <select
@@ -308,10 +446,9 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
             onChange={(e) => setFilterStatus(e.target.value)}
           >
             <option value="all">All Statuses</option>
-            {STATUS_OPTIONS.map(({ value, label }) => (
-              <option key={value} value={value}>{label}</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
             ))}
-            {/* Legacy statuses — shown only if a ticket with that status exists */}
             <option value="open">Open (legacy)</option>
             <option value="pending">Pending (legacy)</option>
           </select>
@@ -355,9 +492,7 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
             <option value="unassigned">Unassigned</option>
             <option value="me">Assigned to me</option>
             {agents.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
+              <option key={a.id} value={a.id}>{a.name}</option>
             ))}
           </select>
 
@@ -372,52 +507,119 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
       {/* ── Stats chips ── */}
       <TicketStats tickets={tickets} />
 
-      {/* ── Column header ── */}
-      {filtered.length > 0 && (
-        <div className="tl-col-header">
-          <ColHeader label="Ref" colKey="id" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-          <ColHeader label="Subject" colKey="subject" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-          <ColHeader label="Customer" colKey="customerName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-          <ColHeader label="Assignee" colKey="assigneeName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-          <ColHeader label="Priority / Status" colKey="priority" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-          <ColHeader label="Created" colKey="createdAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-          <ColHeader label="Board" colKey="boardName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-          <ColHeader label="SLA" colKey="resolutionDueAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-        </div>
-      )}
-
-      {/* ── List ── */}
+      {/* ── Table ── */}
       <div
-        ref={listRef}
-        className="tl-list"
-        role="listbox"
-        aria-label="Tickets"
-        aria-activedescendant={selectedId ? `ticket-${selectedId}` : undefined}
-        onKeyDown={handleListKeyDown}
+        className="tl-table-wrap"
+        ref={tableRef}
+        onKeyDown={handleTableKeyDown}
+        role="grid"
+        aria-label="Tickets table"
+        aria-rowcount={sorted.length}
       >
-        {filtered.length === 0 ? (
-          <div className="tl-empty" role="status">
-            <svg width="40" height="40" viewBox="0 0 36 36" fill="none" aria-hidden="true">
-              <rect x="4" y="6" width="28" height="24" rx="4" stroke="var(--gray-300)" strokeWidth="1.5" />
-              <path d="M10 13h16M10 18h10M10 23h7" stroke="var(--gray-300)" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            <p className="tl-empty-title">No tickets match your filters</p>
-            {hasActiveFilters && (
-              <button className="tl-clear-btn" onClick={clearFilters}>
-                Clear filters
-              </button>
+        <table className="tl-table" aria-label="Tickets">
+          <colgroup>
+            {colOrder.map((key) => (
+              <col
+                key={key}
+                style={{ width: COLUMN_META[key]?.width === '1fr' ? undefined : COLUMN_META[key]?.width }}
+              />
+            ))}
+          </colgroup>
+
+          <thead className="tl-thead">
+            <tr>
+              {colOrder.map((key) => {
+                const isDragging  = dragCol  === key;
+                const isDragOver  = dragOver === key;
+                const isActivSort = sortKey  === key;
+
+                return (
+                  <th
+                    key={key}
+                    className={[
+                      'tl-th',
+                      isDragging ? 'tl-th--dragging'  : '',
+                      isDragOver ? 'tl-th--drag-over' : '',
+                      isActivSort ? 'tl-th--sorted'   : '',
+                    ].filter(Boolean).join(' ')}
+                    draggable
+                    onDragStart={() => handleDragStart(key)}
+                    onDragOver={(e) => handleDragOver(e, key)}
+                    onDrop={(e) => handleDrop(e, key)}
+                    onDragEnd={handleDragEnd}
+                    onClick={() => handleColSort(key)}
+                    aria-sort={
+                      sortKey === key
+                        ? sortDir === 'asc' ? 'ascending' : 'descending'
+                        : 'none'
+                    }
+                    title={`Sort by ${COLUMN_META[key].label} — drag to reorder`}
+                  >
+                    <span className="tl-th-inner">
+                      <span className="tl-th-label">{COLUMN_META[key].label}</span>
+                      <SortIcons colKey={key} sortKey={sortKey} sortDir={sortDir} />
+                    </span>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+
+          <tbody>
+            {sorted.length === 0 ? (
+              <tr>
+                <td colSpan={colOrder.length} className="tl-td-empty">
+                  {hasActiveFilters
+                    ? 'No tickets match your filters.'
+                    : 'No tickets yet.'}
+                </td>
+              </tr>
+            ) : (
+              sorted.map((ticket, rowIdx) => {
+                const isActive   = ticket.id === selectedId;
+                const breached   = isBreached(ticket);
+                const isEven     = rowIdx % 2 === 1;
+
+                return (
+                  <tr
+                    key={ticket.id}
+                    data-ticket-id={ticket.id}
+                    className={[
+                      'tl-tr',
+                      isEven   ? 'tl-tr--even'    : '',
+                      isActive ? 'tl-tr--active'  : '',
+                      breached && !isActive ? 'tl-tr--breached' : '',
+                    ].filter(Boolean).join(' ')}
+                    onClick={() => onSelect(ticket.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelect(ticket.id);
+                      }
+                    }}
+                    role="row"
+                    aria-selected={isActive}
+                    tabIndex={0}
+                  >
+                    {colOrder.map((key, colIdx) => (
+                      <td
+                        key={key}
+                        className={[
+                          'tl-td',
+                          `tl-td--${key}`,
+                          colIdx === 0 && isActive  ? 'tl-td--first-active'  : '',
+                          colIdx === 0 && breached && !isActive ? 'tl-td--first-breached' : '',
+                        ].filter(Boolean).join(' ')}
+                      >
+                        {renderCell(ticket, key)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })
             )}
-          </div>
-        ) : (
-          filtered.map((ticket) => (
-            <TicketRow
-              key={ticket.id}
-              ticket={ticket}
-              isActive={ticket.id === selectedId}
-              onClick={() => onSelect(ticket.id)}
-            />
-          ))
-        )}
+          </tbody>
+        </table>
       </div>
 
       {/* ── Load more ── */}
@@ -432,85 +634,6 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-/* ── ticket row ──────────────────────────────────────────── */
-function TicketRow({ ticket, isActive, onClick }) {
-  const now = Date.now();
-  const isBreached =
-    (ticket.resolutionDueAt    && new Date(ticket.resolutionDueAt).getTime()    < now) ||
-    (ticket.firstResponseDueAt && new Date(ticket.firstResponseDueAt).getTime() < now);
-
-  return (
-    <div
-      id={`ticket-${ticket.id}`}
-      className={`tl-row${isActive ? ' tl-row--active' : ''}${isBreached ? ' tl-row--sla-breached' : ''}`}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-      role="option"
-      aria-selected={isActive}
-      tabIndex={0}
-    >
-      {/* Ref ID */}
-      <span className="tl-row-id">{ticket.id}</span>
-
-      {/* Subject */}
-      <span className="tl-row-subject">{ticket.subject}</span>
-
-      {/* Customer */}
-      <div className="tl-row-customer">
-        <span className="tl-row-name">{ticket.customerName || '—'}</span>
-        <span className="tl-row-email">{ticket.customerEmail}</span>
-      </div>
-
-      {/* Assignee */}
-      <div className="tl-row-assignee">
-        {ticket.assignedTo ? (
-          <>
-            <span className="tl-row-avatar" aria-hidden="true">
-              {initials(ticket.assigneeName)}
-            </span>
-            <span className="tl-row-assignee-name">{ticket.assigneeName}</span>
-          </>
-        ) : (
-          <span className="tl-row-unassigned">Unassigned</span>
-        )}
-      </div>
-
-      {/* Badges */}
-      <div className="tl-row-badges">
-        <PriorityBadge priority={ticket.priority} />
-        <StatusBadge status={ticket.status} />
-      </div>
-
-      {/* Date */}
-      <span className="tl-row-date">{formatDate(ticket.createdAt)}</span>
-
-      {/* Board */}
-      <span className="tl-row-board">
-        {ticket.boardName ? (
-          <span className="tl-board-badge">{ticket.boardName}</span>
-        ) : (
-          <span className="tl-row-unassigned">—</span>
-        )}
-      </span>
-
-      {/* SLA countdown */}
-      <span className="tl-row-sla">
-        <SlaCountdown dueAt={ticket.resolutionDueAt} compact />
-      </span>
-
-      {/* Arrow cue */}
-      <svg className="tl-row-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-        <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
     </div>
   );
 }

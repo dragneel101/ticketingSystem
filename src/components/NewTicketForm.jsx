@@ -375,18 +375,12 @@ export default function NewTicketForm({ onClose, onCreated }) {
     }
   }
 
-  // Close on backdrop click
-  function handleBackdropClick(e) {
-    if (e.target === e.currentTarget) onClose();
-  }
-
   return (
     <div
       className="modal-overlay"
       role="dialog"
       aria-modal="true"
       aria-labelledby="new-ticket-title"
-      onClick={handleBackdropClick}
     >
       <div className="modal" ref={modalRef}>
         {/* Header */}

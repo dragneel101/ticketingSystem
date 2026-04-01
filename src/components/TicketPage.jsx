@@ -4,6 +4,7 @@ import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import SlaCountdown from './SlaCountdown';
 import { STATUS_OPTIONS, STATUS_LABELS, TERMINAL_STATUSES } from '../utils/statusConfig';
+import { useBoards } from '../context/BoardContext';
 
 const SUPPORT_EMAIL = 'support@company.com';
 
@@ -527,6 +528,21 @@ const EVENT_CONFIG = {
       </>
     ),
   },
+  board_changed: {
+    dotClass: 'hist-dot--board',
+    label: (e) => (
+      <>
+        <span className="hist-actor">{e.actorName ?? 'Someone'}</span>
+        {e.fromValue && e.toValue ? (
+          <>{' moved board from '}<strong>{e.fromValue}</strong>{' to '}<strong>{e.toValue}</strong></>
+        ) : e.toValue ? (
+          <>{' assigned to board '}<strong>{e.toValue}</strong></>
+        ) : (
+          <>{' removed from board '}<strong>{e.fromValue}</strong></>
+        )}
+      </>
+    ),
+  },
 };
 
 // Fallback for unknown event types — future-proofs against new event_type values
@@ -605,6 +621,7 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
   }
   const { addToast } = useToast();
   const { user } = useAuth();
+  const { boards } = useBoards();
 
   // Local tab state — purely presentational, no need to lift to context.
   // The active tab is scoped to this page instance and resets when the user
@@ -646,6 +663,15 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
       addToast(`Priority changed to ${newPriority}`, 'info');
     } catch {
       addToast('Failed to update priority', 'error');
+    }
+  }
+
+  async function handleBoardChange(newBoardId) {
+    try {
+      await updateAndRefresh(ticketId, { board_id: newBoardId ? parseInt(newBoardId, 10) : null });
+      addToast('Board updated', 'info');
+    } catch {
+      addToast('Failed to update board', 'error');
     }
   }
 
@@ -713,6 +739,16 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
             value={ticket.priority}
             options={PRIORITY_OPTIONS}
             onChange={handlePriorityChange}
+          />
+          <ControlSelect
+            id={`board-${ticketId}`}
+            label="Board"
+            value={String(ticket.boardId || '')}
+            options={[
+              { value: '', label: '— No board —' },
+              ...boards.map((b) => ({ value: String(b.id), label: b.name })),
+            ]}
+            onChange={handleBoardChange}
           />
           <AssigneeSelect
             id={`assignee-${ticketId}`}
@@ -806,6 +842,14 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
               <time className="tp-info-value" dateTime={ticket.createdAt}>
                 {formatDate(ticket.createdAt)}
               </time>
+            </div>
+            <div className="tp-info-row">
+              <span className="tp-info-label">Board</span>
+              {ticket.boardName ? (
+                <span className="tp-board-badge">{ticket.boardName}</span>
+              ) : (
+                <span className="tp-info-value tp-info-empty">None</span>
+              )}
             </div>
             <div className="tp-info-row">
               <span className="tp-info-label">Assigned</span>

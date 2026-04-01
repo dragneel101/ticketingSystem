@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { TicketProvider } from './context/TicketContext';
 import { ToastProvider, useToast } from './context/ToastContext';
 import { SlaProvider } from './context/SlaContext';
+import { BoardProvider } from './context/BoardContext';
 import TicketList from './components/TicketList';
 import TicketPage from './components/TicketPage';
 import NewTicketForm from './components/NewTicketForm';
@@ -251,9 +252,11 @@ function AuthenticatedApp() {
   return (
     <ToastProvider>
       <SlaProvider>
+        <BoardProvider>
         <TicketProvider>
           <AppShell />
         </TicketProvider>
+        </BoardProvider>
       </SlaProvider>
     </ToastProvider>
   );

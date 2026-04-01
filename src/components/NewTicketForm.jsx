@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTickets } from '../context/TicketContext';
 import { useToast } from '../context/ToastContext';
+import { useBoards } from '../context/BoardContext';
 
 const CATEGORIES = ['Account', 'Billing', 'Feature Request', 'Technical', 'General'];
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
@@ -13,6 +14,7 @@ const INITIAL_FORM = {
   phone: '',
   company: '',
   companyId: null,
+  boardId: null,
   category: 'Account',
   priority: 'medium',
   initialMessage: '',
@@ -152,6 +154,7 @@ function getPrioritySelected(p) {
 export default function NewTicketForm({ onClose, onCreated }) {
   const { addTicket } = useTickets();
   const { addToast } = useToast();
+  const { boards } = useBoards();
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState(INITIAL_ERRORS);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -352,6 +355,7 @@ export default function NewTicketForm({ onClose, onCreated }) {
         phone: form.phone.trim() || undefined,
         company: form.company.trim() || undefined,
         companyId: form.companyId || undefined,
+        boardId: form.boardId || undefined,
         category: form.category,
         priority: form.priority,
         initialMessage: form.initialMessage.trim() || undefined,
@@ -611,7 +615,7 @@ export default function NewTicketForm({ onClose, onCreated }) {
               />
             </div>
 
-            {/* Category + priority row */}
+            {/* Category + board + priority row */}
             <div className="form-row">
               <div className="form-group">
                 <label htmlFor="new-category" className="form-label">Category</label>
@@ -623,6 +627,24 @@ export default function NewTicketForm({ onClose, onCreated }) {
                 >
                   {CATEGORIES.map((c) => (
                     <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="new-board" className="form-label">
+                  Board
+                  <span style={{ fontWeight: 400, color: 'var(--gray-400)', marginLeft: 6 }}>(optional)</span>
+                </label>
+                <select
+                  id="new-board"
+                  className="form-select"
+                  value={form.boardId ?? ''}
+                  onChange={(e) => setField('boardId', e.target.value ? parseInt(e.target.value, 10) : null)}
+                >
+                  <option value="">— No board —</option>
+                  {boards.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>
               </div>

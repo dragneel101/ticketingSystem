@@ -49,6 +49,9 @@ function formatTicket(row, messages = [], events = []) {
     // SLA deadlines — null for tickets created before the SLA migration.
     firstResponseDueAt: row.first_response_due_at ?? null,
     resolutionDueAt:    row.resolution_due_at     ?? null,
+    // Board assignment — null when unboarded
+    boardId:   row.board_id   ?? null,
+    boardName: row.board_name ?? null,
   };
 }
 
@@ -71,6 +74,10 @@ router.get('/', async (req, res) => {
       values.push(req.query.priority);
       conditions.push(`t.priority = $${values.length}`);
     }
+    if (req.query.board_id) {
+      values.push(req.query.board_id);
+      conditions.push(`t.board_id = $${values.length}`);
+    }
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -79,9 +86,11 @@ router.get('/', async (req, res) => {
       pool.query(
         `SELECT t.*,
                 u.name  AS assignee_name,
-                u.email AS assignee_email
+                u.email AS assignee_email,
+                b.name  AS board_name
          FROM tickets t
-         LEFT JOIN users u ON u.id = t.assigned_to
+         LEFT JOIN users  u ON u.id = t.assigned_to
+         LEFT JOIN boards b ON b.id = t.board_id
          ${where}
          ORDER BY t.created_at DESC
          LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
@@ -109,12 +118,13 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { rows: ticketRows } = await pool.query(
-      // Same LEFT JOIN as the list endpoint — consistent shape for formatTicket
       `SELECT t.*,
               u.name  AS assignee_name,
-              u.email AS assignee_email
+              u.email AS assignee_email,
+              b.name  AS board_name
        FROM tickets t
-       LEFT JOIN users u ON u.id = t.assigned_to
+       LEFT JOIN users  u ON u.id = t.assigned_to
+       LEFT JOIN boards b ON b.id = t.board_id
        WHERE t.ticket_ref = $1`,
       [req.params.id]
     );
@@ -147,7 +157,7 @@ router.get('/:id', async (req, res) => {
 
 // ── POST /api/tickets ─────────────────────────────────────────
 router.post('/', async (req, res) => {
-  const { subject, customerEmail, customerName, category, priority, phone, company, companyId, initialMessage } = req.body;
+  const { subject, customerEmail, customerName, category, priority, phone, company, companyId, boardId, initialMessage } = req.body;
 
   if (!subject?.trim() || !customerEmail?.trim()) {
     return res.status(400).json({ error: 'subject and customerEmail are required' });
@@ -158,8 +168,8 @@ router.post('/', async (req, res) => {
     await client.query('BEGIN');
 
     const { rows } = await client.query(
-      `INSERT INTO tickets (ticket_ref, subject, customer_email, customer_name, category, priority, phone, company, company_id)
-       VALUES ('TKT-' || LPAD(nextval('ticket_ref_seq')::TEXT, 3, '0'), $1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO tickets (ticket_ref, subject, customer_email, customer_name, category, priority, phone, company, company_id, board_id)
+       VALUES ('TKT-' || LPAD(nextval('ticket_ref_seq')::TEXT, 3, '0'), $1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         subject.trim(),
@@ -170,6 +180,7 @@ router.post('/', async (req, res) => {
         phone?.trim() || null,
         company?.trim() || null,
         companyId || null,
+        boardId ? parseInt(boardId, 10) : null,
       ]
     );
     const ticket = rows[0];
@@ -238,6 +249,12 @@ router.patch('/:id', async (req, res) => {
 
   for (const key of allowed) {
     if (req.body[key] !== undefined) updates[key] = req.body[key];
+  }
+
+  // board_id can be null (remove from board) or an integer
+  if (req.body.board_id !== undefined) {
+    const raw = req.body.board_id;
+    updates.board_id = raw === null ? null : parseInt(raw, 10) || null;
   }
 
   // Handle assigned_to separately: it can be null (unassign) or an integer (assign).
@@ -416,15 +433,36 @@ router.patch('/:id', async (req, res) => {
       ]);
     }
 
+    // board changed?
+    if (updates.board_id !== undefined && updates.board_id !== old.board_id) {
+      // Look up board names for from/to values to keep the event self-contained
+      const boardIds = [old.board_id, updates.board_id].filter(Boolean);
+      let boardNames = {};
+      if (boardIds.length) {
+        const { rows: bRows } = await client.query(
+          `SELECT id, name FROM boards WHERE id = ANY($1)`,
+          [boardIds]
+        );
+        bRows.forEach((b) => { boardNames[b.id] = b.name; });
+      }
+      await client.query(eventInsert, [
+        ...baseParams, 'board_changed',
+        old.board_id ? (boardNames[old.board_id] ?? String(old.board_id)) : null,
+        updates.board_id ? (boardNames[updates.board_id] ?? String(updates.board_id)) : null,
+      ]);
+    }
+
     await client.query('COMMIT');
 
-    // ── Step 5: return fresh ticket with JOIN for assignee data ──
+    // ── Step 5: return fresh ticket with JOINs for assignee + board ──
     const { rows: joined } = await pool.query(
       `SELECT t.*,
               u.name  AS assignee_name,
-              u.email AS assignee_email
+              u.email AS assignee_email,
+              b.name  AS board_name
        FROM tickets t
-       LEFT JOIN users u ON u.id = t.assigned_to
+       LEFT JOIN users  u ON u.id = t.assigned_to
+       LEFT JOIN boards b ON b.id = t.board_id
        WHERE t.id = $1`,
       [old.id]
     );

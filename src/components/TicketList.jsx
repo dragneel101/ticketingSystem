@@ -3,6 +3,7 @@ import { useTickets } from '../context/TicketContext';
 import { useAuth } from '../context/AuthContext';
 import SlaCountdown from './SlaCountdown';
 import { STATUS_LABELS, STATUS_OPTIONS, TERMINAL_STATUSES } from '../utils/statusConfig';
+import { useBoards } from '../context/BoardContext';
 
 /* ── helpers ─────────────────────────────────────────────── */
 const PRIORITY_ORDER = { urgent: 3, high: 2, medium: 1, low: 0 };
@@ -116,9 +117,11 @@ function ColHeader({ label, colKey, sortKey, sortDir, onSort }) {
 export default function TicketList({ selectedId, onSelect, onNewTicket }) {
   const { tickets, meta, loadMoreTickets } = useTickets();
   const { user } = useAuth();
+  const { boards } = useBoards();
   const [filterStatus, setFilterStatus] = useState('all');
   const [loadingMore, setLoadingMore] = useState(false);
   const [filterPriority, setFilterPriority] = useState('all');
+  const [filterBoard, setFilterBoard] = useState('all');
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
   const [filterAssignee, setFilterAssignee] = useState('all');
@@ -147,6 +150,11 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
     const result = tickets.filter((t) => {
       const statusOk = filterStatus === 'all' || t.status === filterStatus;
       const priorityOk = filterPriority === 'all' || t.priority === filterPriority;
+      const boardOk = filterBoard === 'all'
+        ? true
+        : filterBoard === 'none'
+          ? (t.boardId === null || t.boardId === undefined)
+          : t.boardId === parseInt(filterBoard, 10);
       const searchOk = !q ||
         t.subject.toLowerCase().includes(q) ||
         t.customerEmail.toLowerCase().includes(q);
@@ -160,7 +168,7 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
         assigneeOk = t.assignedTo === parseInt(filterAssignee, 10);
       }
 
-      return statusOk && priorityOk && searchOk && assigneeOk;
+      return statusOk && priorityOk && boardOk && searchOk && assigneeOk;
     });
 
     if (sortKey) {
@@ -189,7 +197,7 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
     }
 
     return result;
-  }, [tickets, filterStatus, filterPriority, filterAssignee, search, user?.id, sortKey, sortDir]);
+  }, [tickets, filterStatus, filterPriority, filterBoard, filterAssignee, search, user?.id, sortKey, sortDir]);
 
   const handleListKeyDown = useCallback((e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -225,12 +233,14 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
   const hasActiveFilters =
     filterStatus !== 'all' ||
     filterPriority !== 'all' ||
+    filterBoard !== 'all' ||
     filterAssignee !== 'all' ||
     search.trim() !== '';
 
   function clearFilters() {
     setFilterStatus('all');
     setFilterPriority('all');
+    setFilterBoard('all');
     setFilterAssignee('all');
     setSearch('');
   }
@@ -320,6 +330,20 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
             <option value="low">Low</option>
           </select>
 
+          <label htmlFor="filter-board" className="visually-hidden">Filter by board</label>
+          <select
+            id="filter-board"
+            className="tl-select"
+            value={filterBoard}
+            onChange={(e) => setFilterBoard(e.target.value)}
+          >
+            <option value="all">All Boards</option>
+            <option value="none">No Board</option>
+            {boards.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+
           <label htmlFor="filter-assignee" className="visually-hidden">Filter by assignee</label>
           <select
             id="filter-assignee"
@@ -357,6 +381,7 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
           <ColHeader label="Assignee" colKey="assigneeName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
           <ColHeader label="Priority / Status" colKey="priority" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
           <ColHeader label="Created" colKey="createdAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+          <ColHeader label="Board" colKey="boardName" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
           <ColHeader label="SLA" colKey="resolutionDueAt" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
         </div>
       )}
@@ -467,6 +492,15 @@ function TicketRow({ ticket, isActive, onClick }) {
 
       {/* Date */}
       <span className="tl-row-date">{formatDate(ticket.createdAt)}</span>
+
+      {/* Board */}
+      <span className="tl-row-board">
+        {ticket.boardName ? (
+          <span className="tl-board-badge">{ticket.boardName}</span>
+        ) : (
+          <span className="tl-row-unassigned">—</span>
+        )}
+      </span>
 
       {/* SLA countdown */}
       <span className="tl-row-sla">

@@ -91,6 +91,10 @@ app.use('/api/companies', requireAuth, companiesRouter);
 const slaRouter = require('./routes/sla');
 app.use('/api/sla-policies', requireAuth, slaRouter);
 
+// ── Board routes (protected; admin-only mutations) ────────────
+const boardsRouter = require('./routes/boards');
+app.use('/api/boards', requireAuth, boardsRouter);
+
 // ── SPA catch-all — must be last ─────────────────────────────
 // Any non-API request gets index.html so client-side routing works.
 app.get('*', (req, res) => {

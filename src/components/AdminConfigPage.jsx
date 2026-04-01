@@ -1,5 +1,6 @@
 import PasswordPolicyForm from './PasswordPolicyForm';
 import SlaAdminPanel from './SlaAdminPanel';
+import BoardsAdminPanel from './BoardsAdminPanel';
 
 // AdminConfigPage renders PasswordPolicyForm in "inline" mode — no modal chrome.
 //
@@ -39,6 +40,14 @@ export default function AdminConfigPage() {
           <h2 className="settings-section-title">SLA Policies</h2>
           <div className="settings-card">
             <SlaAdminPanel />
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <h2 className="settings-section-title">Boards</h2>
+          <p className="settings-section-desc">Boards represent team queues (e.g. L1 Support, Dev Team). Tickets can be assigned to a board for routing and filtering.</p>
+          <div className="settings-card">
+            <BoardsAdminPanel />
           </div>
         </section>
       </div>

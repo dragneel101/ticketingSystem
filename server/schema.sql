@@ -281,3 +281,15 @@ ALTER TABLE tickets ADD CONSTRAINT tickets_status_check
 
 -- New tickets start as 'unassigned' (previously 'open').
 ALTER TABLE tickets ALTER COLUMN status SET DEFAULT 'unassigned';
+
+-- ── Migration: boards ─────────────────────────────────────────
+-- Boards represent team queues (e.g. "L1 Support", "Dev Team").
+-- Deleting a board sets board_id to NULL on tickets — tickets are not deleted.
+CREATE TABLE IF NOT EXISTS boards (
+  id         SERIAL PRIMARY KEY,
+  name       VARCHAR(255) NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS board_id INTEGER REFERENCES boards(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_tickets_board_id ON tickets(board_id);

@@ -13,11 +13,23 @@ function formatDate(iso) {
   }).format(new Date(iso));
 }
 
+// ── Escape key hook ───────────────────────────────────────
+function useEscapeKey(handler) {
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === 'Escape') handler();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [handler]);
+}
+
 // ── CustomerTicketsModal ──────────────────────────────────
 function CustomerTicketsModal({ customer, onClose, onSelectTicket }) {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const { addToast } = useToast();
+  useEscapeKey(onClose);
 
   useEffect(() => {
     async function load() {
@@ -35,12 +47,8 @@ function CustomerTicketsModal({ customer, onClose, onSelectTicket }) {
     load();
   }, [customer.id, addToast]);
 
-  function handleBackdropClick(e) {
-    if (e.target === e.currentTarget) onClose();
-  }
-
   return (
-    <div className="modal-backdrop" onClick={handleBackdropClick} role="dialog" aria-modal="true" aria-label={`Tickets for ${customer.name}`}>
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`Tickets for ${customer.name}`}>
       <div className="modal-card cust-tickets-modal">
         <div className="modal-header">
           <div>
@@ -113,6 +121,7 @@ function AddCustomerModal({ onClose, onCreated }) {
     notes: '',
   });
   const [loading, setLoading] = useState(false);
+  useEscapeKey(onClose);
   const [companyError, setCompanyError] = useState('');
   const [companySuggestions, setCompanySuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -174,12 +183,8 @@ function AddCustomerModal({ onClose, onCreated }) {
     }
   }
 
-  function handleBackdropClick(e) {
-    if (e.target === e.currentTarget) onClose();
-  }
-
   return (
-    <div className="modal-backdrop" onClick={handleBackdropClick} role="dialog" aria-modal="true" aria-label="Add customer">
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add customer">
       <div className="modal-card">
         <div className="modal-header">
           <h2 className="modal-title">Add Customer</h2>
@@ -305,6 +310,7 @@ function EditCustomerModal({ customer, onClose, onUpdated }) {
     notes: customer.notes ?? '',
   });
   const [loading, setLoading] = useState(false);
+  useEscapeKey(onClose);
   const [companyError, setCompanyError] = useState('');
   const [companySuggestions, setCompanySuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -368,12 +374,8 @@ function EditCustomerModal({ customer, onClose, onUpdated }) {
     }
   }
 
-  function handleBackdropClick(e) {
-    if (e.target === e.currentTarget) onClose();
-  }
-
   return (
-    <div className="modal-backdrop" onClick={handleBackdropClick} role="dialog" aria-modal="true" aria-label="Edit customer">
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Edit customer">
       <div className="modal-card">
         <div className="modal-header">
           <h2 className="modal-title">Edit Customer</h2>
@@ -699,8 +701,12 @@ export default function CustomersPage({ onSelectTicket, initialSearch = '' }) {
           {/* Search bar — lives in the header so it's always visible */}
           <div className="cust-search-row">
             <div className="cust-search-wrap">
+              <svg className="cust-search-icon" width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M8 8l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
               <input
-                className="cust-search"
+                className="cust-search cust-search--icon"
                 type="search"
                 value={searchInput}
                 onChange={handleSearchChange}

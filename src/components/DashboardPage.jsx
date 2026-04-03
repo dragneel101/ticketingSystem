@@ -1,16 +1,10 @@
-import { useMemo } from 'react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts';
+import { useMemo, lazy, Suspense } from 'react';
+
+const DashboardCharts = lazy(() => import('./DashboardCharts'));
 import { useTickets } from '../context/TicketContext';
 import { useAuth } from '../context/AuthContext';
 import { STATUS_LABELS } from '../utils/statusConfig';
+import SlaCountdown from './SlaCountdown';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -61,33 +55,14 @@ const PRIORITY_COLORS = {
 
 // ─── sub-components ─────────────────────────────────────────────────────────
 
-function StatCard({ label, value, accent }) {
+function StatCard({ label, value, accent, breach }) {
   return (
-    <div className="dash-stat-card" style={{ '--accent': accent }}>
+    <div
+      className={`dash-stat-card${breach ? ' dash-stat-card--breach' : ''}`}
+      style={{ '--accent': accent }}
+    >
       <span className="dash-stat-value">{value}</span>
       <span className="dash-stat-label">{label}</span>
-    </div>
-  );
-}
-
-function StatusTooltip({ active, payload }) {
-  if (!active || !payload?.length) return null;
-  const { name, value } = payload[0];
-  return (
-    <div className="dash-chart-tooltip">
-      <span className="dash-chart-tooltip-label">{name}</span>
-      <span className="dash-chart-tooltip-value">{value}</span>
-    </div>
-  );
-}
-
-function PriorityTooltip({ active, payload }) {
-  if (!active || !payload?.length) return null;
-  const { name, value } = payload[0];
-  return (
-    <div className="dash-chart-tooltip">
-      <span className="dash-chart-tooltip-label">{name}</span>
-      <span className="dash-chart-tooltip-value">{value}</span>
     </div>
   );
 }
@@ -137,7 +112,29 @@ export default function DashboardPage({ onViewTicket, onNavigate }) {
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .slice(0, 8);
 
-    return { byStatus, byPriority, statusChartData, priorityChartData, recent, noOwner, assignedToMe };
+    // SLA breach/warning computations
+    const now = Date.now();
+    const SIXTY_MIN = 60 * 60_000;
+    const TERMINAL = new Set(['resolved', 'closed']);
+
+    let slaBreached = 0;
+    const breachingSoon = [];
+
+    for (const t of tickets) {
+      if (!t.resolutionDueAt || TERMINAL.has(t.status)) continue;
+      const diffMs = new Date(t.resolutionDueAt) - now;
+      if (diffMs <= 0) {
+        slaBreached++;
+      } else if (diffMs <= SIXTY_MIN) {
+        breachingSoon.push(t);
+      }
+    }
+
+    // Sort breaching-soon by most urgent first, cap at 5
+    breachingSoon.sort((a, b) => new Date(a.resolutionDueAt) - new Date(b.resolutionDueAt));
+    const breachingSoonSlice = breachingSoon.slice(0, 5);
+
+    return { byStatus, byPriority, statusChartData, priorityChartData, recent, noOwner, assignedToMe, slaBreached, breachingSoon: breachingSoonSlice };
   }, [tickets, user]);
 
   // ── loading state ────────────────────────────────────────────────────────
@@ -190,87 +187,56 @@ export default function DashboardPage({ onViewTicket, onNavigate }) {
             value={metrics.noOwner}
             accent={metrics.noOwner > 0 ? '#ef4444' : '#9aa3b5'}
           />
+          <StatCard
+            label="SLA Breached"
+            value={metrics.slaBreached}
+            accent={metrics.slaBreached > 0 ? 'var(--sla-breach-text)' : '#9aa3b5'}
+            breach={metrics.slaBreached > 0}
+          />
           {(user?.role === 'agent' || user?.role === 'admin') && (
             <StatCard label="Mine" value={metrics.assignedToMe} accent="var(--brand)" />
           )}
         </div>
 
+        {/* ── breaching soon ───────────────────────────────────────────────── */}
+        {metrics.breachingSoon.length > 0 && (
+          <section className="dash-card dash-breaching-soon" aria-label="Tickets breaching SLA soon">
+            <h2 className="dash-card-title">
+              Breaching Soon
+              <span className="dash-breaching-badge">{metrics.breachingSoon.length}</span>
+            </h2>
+            <ul className="dash-recent-list">
+              {metrics.breachingSoon.map((ticket) => (
+                <li key={ticket.id} className="dash-recent-row">
+                  <div className="dash-recent-info">
+                    <span className="dash-recent-id">{ticket.id}</span>
+                    <span className="dash-recent-subject">{ticket.subject}</span>
+                  </div>
+                  <div className="dash-recent-meta">
+                    <SlaCountdown dueAt={ticket.resolutionDueAt} compact />
+                    <button
+                      className="dash-view-btn"
+                      onClick={() => onViewTicket(ticket.id)}
+                      aria-label={`View ticket ${ticket.id}`}
+                    >
+                      View
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {/* ── charts row ──────────────────────────────────────────────────── */}
-        <div className="dash-charts-row">
-
-          {/* By Status — horizontal bar chart */}
-          <section className="dash-card dash-chart-card--status" aria-label="Tickets by status">
-            <h2 className="dash-card-title">By Status</h2>
-            {isEmpty ? (
-              <p className="dash-empty-section">No tickets to display.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart
-                  data={metrics.statusChartData}
-                  layout="vertical"
-                  margin={{ top: 0, right: 20, left: 0, bottom: 0 }}
-                >
-                  <XAxis
-                    type="number"
-                    tick={{ fontSize: 11, fill: 'var(--gray-400)', fontFamily: 'var(--sans)' }}
-                    axisLine={false}
-                    tickLine={false}
-                    allowDecimals={false}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={130}
-                    tick={{ fontSize: 11, fill: 'var(--gray-600)', fontFamily: 'var(--sans)' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip content={<StatusTooltip />} cursor={{ fill: 'var(--gray-50)' }} />
-                  <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={18}>
-                    {metrics.statusChartData.map((entry) => (
-                      <Cell key={entry.key} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </section>
-
-          {/* By Priority — vertical bar chart */}
-          <section className="dash-card dash-chart-card--priority" aria-label="Tickets by priority">
-            <h2 className="dash-card-title">By Priority</h2>
-            {isEmpty ? (
-              <p className="dash-empty-section">No tickets to display.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart
-                  data={metrics.priorityChartData}
-                  margin={{ top: 0, right: 8, left: -16, bottom: 0 }}
-                >
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 11, fill: 'var(--gray-600)', fontFamily: 'var(--sans)' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: 'var(--gray-400)', fontFamily: 'var(--sans)' }}
-                    axisLine={false}
-                    tickLine={false}
-                    allowDecimals={false}
-                  />
-                  <Tooltip content={<PriorityTooltip />} cursor={{ fill: 'var(--gray-50)' }} />
-                  <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={36}>
-                    {metrics.priorityChartData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </section>
-
-        </div>
+        {!isEmpty && (
+          <Suspense fallback={<div className="dash-charts-row dash-charts-loading" />}>
+            <DashboardCharts
+              statusChartData={metrics.statusChartData}
+              priorityChartData={metrics.priorityChartData}
+            />
+          </Suspense>
+        )}
 
         {/* ── recent activity ──────────────────────────────────────────────── */}
         <section className="dash-card" aria-label="Recent activity">

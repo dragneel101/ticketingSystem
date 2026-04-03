@@ -195,6 +195,17 @@ export function CompanyDetailPage({ company, onBack, onSelectTicket, onViewCusto
   );
 }
 
+// ── Escape key hook ───────────────────────────────────────
+function useEscapeKey(handler) {
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === 'Escape') handler();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [handler]);
+}
+
 // ── AddCompanyModal ───────────────────────────────────────
 function AddCompanyModal({ onClose, onCreated }) {
   const { addToast } = useToast();
@@ -207,6 +218,7 @@ function AddCompanyModal({ onClose, onCreated }) {
     sla_policy_id: '',
   });
   const [loading, setLoading] = useState(false);
+  useEscapeKey(onClose);
 
   function set(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -243,12 +255,8 @@ function AddCompanyModal({ onClose, onCreated }) {
     }
   }
 
-  function handleBackdropClick(e) {
-    if (e.target === e.currentTarget) onClose();
-  }
-
   return (
-    <div className="modal-backdrop" onClick={handleBackdropClick} role="dialog" aria-modal="true" aria-label="Add company">
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add company">
       <div className="modal-card">
         <div className="modal-header">
           <h2 className="modal-title">Add Company</h2>
@@ -336,6 +344,7 @@ function EditCompanyModal({ company, onClose, onUpdated }) {
     sla_policy_id: company.sla_policy_id ?? '',
   });
   const [loading, setLoading] = useState(false);
+  useEscapeKey(onClose);
 
   function set(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -372,12 +381,8 @@ function EditCompanyModal({ company, onClose, onUpdated }) {
     }
   }
 
-  function handleBackdropClick(e) {
-    if (e.target === e.currentTarget) onClose();
-  }
-
   return (
-    <div className="modal-backdrop" onClick={handleBackdropClick} role="dialog" aria-modal="true" aria-label="Edit company">
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Edit company">
       <div className="modal-card">
         <div className="modal-header">
           <h2 className="modal-title">Edit Company</h2>
@@ -540,15 +545,19 @@ export default function CompaniesPage({ onSelectCompany, onSelectTicket }) {
                 {total > 0 ? `${total} company${total !== 1 ? 's' : ''}` : 'Track your client companies.'}
               </p>
             </div>
-            <button className="btn-add-customer" onClick={() => setShowAdd(true)}>
+            <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
               + Add Company
             </button>
           </div>
 
           <div className="cust-search-row">
             <div className="cust-search-wrap">
+              <svg className="cust-search-icon" width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M8 8l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
               <input
-                className="cust-search"
+                className="cust-search cust-search--icon"
                 type="search"
                 value={searchInput}
                 onChange={handleSearchChange}
@@ -581,7 +590,7 @@ export default function CompaniesPage({ onSelectCompany, onSelectTicket }) {
               <tbody>
                 {companies.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="user-table-empty">
+                    <td colSpan={8} className="user-table-empty">
                       {search ? `No companies matching "${search}".` : 'No companies found.'}
                     </td>
                   </tr>
@@ -683,20 +692,21 @@ function CompanyRow({ row, isAdmin, onSelectCompany, onEdit, onDelete, defaultPo
             </button>
           )}
           {isAdmin && deleteState === 'confirming' && (
-            <>
+            <div className="user-delete-confirm">
+              <span className="user-delete-confirm-text">Delete {row.name}?</span>
               <button
-                className="btn-row-action btn-row-action--danger-confirm"
-                onClick={() => onDelete(row, setDeleteState)}
-              >
-                Confirm
-              </button>
-              <button
-                className="btn-row-action"
+                className="btn-action-cancel"
                 onClick={() => setDeleteState('idle')}
               >
                 Cancel
               </button>
-            </>
+              <button
+                className="btn-action-danger"
+                onClick={() => onDelete(row, setDeleteState)}
+              >
+                Confirm Delete
+              </button>
+            </div>
           )}
         </div>
       </td>

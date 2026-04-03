@@ -4237,6 +4237,23 @@ body {
 
 .cust-search-wrap {
   max-width: 420px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* Search icon — absolutely positioned inside the wrapper, same pattern as .tl-search-icon */
+.cust-search-icon {
+  position: absolute;
+  left: 11px;
+  color: var(--gray-400);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+/* Variant with icon — adds left padding so text doesn't overlap the icon */
+.cust-search--icon {
+  padding-left: 2.1rem;
 }
 
 .cust-search {
@@ -4643,6 +4660,32 @@ body {
 .sla-chip--warn   { background: var(--sla-warn-bg);   color: var(--sla-warn-text); }
 .sla-chip--breach { background: var(--sla-breach-bg); color: var(--sla-breach-text); }
 
+/* ── Breached stat card tint ────────────────────────────────── */
+.dash-stat-card--breach {
+  background: var(--sla-breach-bg);
+}
+
+/* ── "Breaching Soon" section header badge ──────────────────── */
+.dash-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.dash-breaching-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: var(--r-full);
+  background: var(--sla-breach-bg);
+  color: var(--sla-breach-text);
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 /* ── Breached ticket row highlight ─────────────────────────── */
 .tl-row--sla-breached {
   border-left: 3px solid var(--sla-breach-text);
@@ -4973,4 +5016,26 @@ body {
   font-size: 0.82rem;
   color: var(--gray-500);
   margin: -0.5rem 0 0.75rem;
+}
+
+/* ── Email settings form ─────────────────────────────────────── */
+.email-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.25rem;
+}
+
+/* Two-column grid on wider cards, single column on small screens */
+.email-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem 1.5rem;
+}
+
+.email-settings-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--gray-100);
 }

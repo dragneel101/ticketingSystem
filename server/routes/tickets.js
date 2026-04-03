@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { computeSlaDeadlines } = require('../lib/slaUtils');
+const { sendEmail, isEmailConfigured, getSupportEmail } = require('../lib/emailService');
 
 // ── helpers ───────────────────────────────────────────────────
 
@@ -53,6 +54,57 @@ function formatTicket(row, messages = [], events = []) {
     boardId:   row.board_id   ?? null,
     boardName: row.board_name ?? null,
   };
+}
+
+// ── Email template: ticket created ───────────────────────────
+// Generates a simple HTML notification for new ticket assignments.
+// Inline styles because email clients strip <style> blocks.
+function buildTicketCreatedHtml({ ticketRef, subject, customerName, customerEmail, priority, resolutionDueAt }) {
+  const formattedDue = resolutionDueAt
+    ? new Date(resolutionDueAt).toLocaleString('en-US', {
+        weekday: 'short', year: 'numeric', month: 'short',
+        day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+      })
+    : 'No SLA';
+
+  const escHtml = (str) => String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a2e;">
+      <div style="background: #5b5ef4; color: #fff; padding: 16px 24px; border-radius: 6px 6px 0 0;">
+        <strong style="font-size: 16px;">New Ticket Assigned: [${escHtml(ticketRef)}]</strong>
+      </div>
+      <div style="border: 1px solid #e2e8f0; border-top: none; padding: 24px; border-radius: 0 0 6px 6px;">
+        <p style="margin: 0 0 16px;">A new ticket has been assigned to you.</p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600; width: 40%;">Ticket</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${escHtml(ticketRef)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600;">Customer</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${escHtml(customerName)} (${escHtml(customerEmail)})</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600;">Subject</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${escHtml(subject)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600;">Priority</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; text-transform: capitalize;">${escHtml(priority)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600;">Resolution due</td>
+            <td style="padding: 8px 12px;">${escHtml(formattedDue)}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  `;
 }
 
 // ── GET /api/tickets ──────────────────────────────────────────
@@ -223,6 +275,46 @@ router.post('/', async (req, res) => {
     }
 
     await client.query('COMMIT');
+
+    // ── Fire-and-forget assignment notification ───────────────
+    // We determine the recipient after committing so the ticket is fully
+    // persisted before any async side-effect. sendEmail never throws, so
+    // this cannot affect the HTTP response or rollback the transaction.
+    if (isEmailConfigured()) {
+      let recipientEmail = null;
+
+      if (ticket.assigned_to) {
+        // Ticket was created with an assignee — notify them directly.
+        const { rows: assigneeRows } = await pool.query(
+          'SELECT email FROM users WHERE id = $1',
+          [ticket.assigned_to]
+        );
+        recipientEmail = assigneeRows[0]?.email ?? null;
+      } else if (getSupportEmail()) {
+        // Unassigned ticket — notify the configured support inbox so it
+        // doesn't fall through the cracks. getSupportEmail() reads from
+        // runtime config so DB-saved values are picked up without restart.
+        recipientEmail = getSupportEmail();
+      }
+
+      if (recipientEmail) {
+        // Intentionally not awaited — the HTTP response goes out immediately.
+        // SMTP latency (often 200ms–2s) is unacceptable to block a POST on.
+        sendEmail({
+          to: recipientEmail,
+          subject: `[${ticket.ticket_ref}] New ticket assigned: ${ticket.subject}`,
+          html: buildTicketCreatedHtml({
+            ticketRef:       ticket.ticket_ref,
+            subject:         ticket.subject,
+            customerName:    ticket.customer_name,
+            customerEmail:   ticket.customer_email,
+            priority:        ticket.priority,
+            resolutionDueAt: ticket.resolution_due_at,
+          }),
+        });
+      }
+    }
+
     res.status(201).json(formatTicket(ticket, messages));
   } catch (err) {
     await client.query('ROLLBACK');
@@ -388,8 +480,12 @@ router.patch('/:id', async (req, res) => {
         policyRows[0] ?? null,
         old.created_at
       );
+      // Reset sla_notified alongside the new deadline so the approaching-deadline
+      // notifier fires again for the recalculated window. Without this reset,
+      // a ticket that was already notified at high priority would stay silent
+      // after being escalated to urgent with a tighter deadline.
       await client.query(
-        'UPDATE tickets SET first_response_due_at = $1, resolution_due_at = $2 WHERE id = $3',
+        'UPDATE tickets SET first_response_due_at = $1, resolution_due_at = $2, sla_notified = false WHERE id = $3',
         [firstResponseDueAt, resolutionDueAt, old.id]
       );
     }

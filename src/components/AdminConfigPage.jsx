@@ -1,6 +1,7 @@
 import PasswordPolicyForm from './PasswordPolicyForm';
 import SlaAdminPanel from './SlaAdminPanel';
 import BoardsAdminPanel from './BoardsAdminPanel';
+import EmailSettingsForm from './EmailSettingsForm';
 
 // AdminConfigPage renders PasswordPolicyForm in "inline" mode — no modal chrome.
 //
@@ -48,6 +49,14 @@ export default function AdminConfigPage() {
           <p className="settings-section-desc">Boards represent team queues (e.g. L1 Support, Dev Team). Tickets can be assigned to a board for routing and filtering.</p>
           <div className="settings-card">
             <BoardsAdminPanel />
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <h2 className="settings-section-title">Email / Notifications</h2>
+          <p className="settings-section-desc">Configure SMTP credentials for outbound email. Used for ticket assignment notifications and SLA deadline warnings. Env vars (<code>SMTP_HOST</code>, <code>SMTP_USER</code>, etc.) remain active as fallback when these fields are empty.</p>
+          <div className="settings-card">
+            <EmailSettingsForm />
           </div>
         </section>
       </div>

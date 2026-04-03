@@ -838,3 +838,68 @@ describe('PATCH /api/tickets/:id — ticket_events (audit trail)', () => {
     expect(types).toContain('priority_changed');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// POST /api/tickets — SLA deadline insertion
+// ═══════════════════════════════════════════════════════════════
+describe('POST /api/tickets — SLA deadlines', () => {
+  test('ticket created with default SLA policy gets firstResponseDueAt and resolutionDueAt', async () => {
+    const agent = await loginAs(TEST_AGENT);
+
+    // Only verify SLA fields when a default policy exists — if none is configured
+    // the fields should be null (still valid, not an error).
+    const { rows: policies } = await pool.query('SELECT * FROM sla_policies WHERE is_default = TRUE');
+
+    const ticket = await createTicket(agent, { subject: 'SLA deadline insertion test', priority: 'high' });
+
+    if (policies.length > 0) {
+      // A default policy exists — deadlines should be set
+      expect(ticket.firstResponseDueAt).not.toBeNull();
+      expect(ticket.resolutionDueAt).not.toBeNull();
+      // Deadlines must be in the future relative to creation
+      expect(new Date(ticket.firstResponseDueAt).getTime()).toBeGreaterThan(new Date(ticket.createdAt).getTime());
+      expect(new Date(ticket.resolutionDueAt).getTime()).toBeGreaterThan(new Date(ticket.createdAt).getTime());
+      // Resolution must be after first response
+      expect(new Date(ticket.resolutionDueAt).getTime()).toBeGreaterThanOrEqual(
+        new Date(ticket.firstResponseDueAt).getTime()
+      );
+    } else {
+      // No default policy — deadlines should be null
+      expect(ticket.firstResponseDueAt ?? null).toBeNull();
+      expect(ticket.resolutionDueAt ?? null).toBeNull();
+    }
+  });
+
+  test('priority change via PATCH recalculates resolutionDueAt', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const { rows: policies } = await pool.query('SELECT * FROM sla_policies WHERE is_default = TRUE');
+    if (policies.length === 0) return; // skip if no policy
+
+    const ticket = await createTicket(agent, { subject: 'SLA recalc test', priority: 'low' });
+    const originalDue = ticket.resolutionDueAt;
+
+    await agent.patch(`/api/tickets/${ticket.id}`).send({ priority: 'urgent' }).expect(200);
+    const detail = await agent.get(`/api/tickets/${ticket.id}`).expect(200);
+
+    // Urgent resolution window is shorter than low — due date should move earlier
+    if (originalDue) {
+      expect(new Date(detail.body.resolutionDueAt).getTime()).toBeLessThan(
+        new Date(originalDue).getTime()
+      );
+    }
+  });
+
+  test('priority change resets sla_notified to false', async () => {
+    const agent = await loginAs(TEST_AGENT);
+    const ticket = await createTicket(agent, { subject: 'SLA notified reset test', priority: 'low' });
+
+    // Mark as notified directly in DB
+    await pool.query('UPDATE tickets SET sla_notified = TRUE WHERE ticket_ref = $1', [ticket.id]);
+
+    // Change priority — should reset sla_notified
+    await agent.patch(`/api/tickets/${ticket.id}`).send({ priority: 'urgent' }).expect(200);
+
+    const { rows } = await pool.query('SELECT sla_notified FROM tickets WHERE ticket_ref = $1', [ticket.id]);
+    expect(rows[0].sla_notified).toBe(false);
+  });
+});

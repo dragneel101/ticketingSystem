@@ -85,6 +85,17 @@ INSERT INTO settings (key, value)
 VALUES ('min_password_length', '10')
 ON CONFLICT (key) DO NOTHING;
 
+-- ── SMTP / email settings seed ───────────────────────────────
+-- Seeded with empty strings so the rows always exist for GET /api/settings.
+-- Admins fill these in via the Settings UI; env vars remain the fallback
+-- when these values are empty strings.
+INSERT INTO settings (key, value) VALUES ('smtp_host', '')          ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('smtp_port', '587')       ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('smtp_user', '')          ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('smtp_pass', '')          ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('smtp_from', 'noreply@supportdesk.local') ON CONFLICT (key) DO NOTHING;
+INSERT INTO settings (key, value) VALUES ('support_email', '')      ON CONFLICT (key) DO NOTHING;
+
 -- ── Migration: ticket assignment ──────────────────────────────
 -- Run once against an existing database. schema.sql is idempotent:
 -- IF NOT EXISTS means re-running the full file is safe.
@@ -293,3 +304,16 @@ CREATE TABLE IF NOT EXISTS boards (
 
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS board_id INTEGER REFERENCES boards(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_tickets_board_id ON tickets(board_id);
+
+-- ── Migration: SLA notification flag ─────────────────────────
+-- sla_notified tracks whether a warning email has been sent for the current
+-- resolution_due_at deadline. Reset to false whenever the deadline changes
+-- (priority change triggers a recalculation) so the new window gets its own
+-- notification. DEFAULT false means existing tickets are eligible on first check.
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS sla_notified BOOLEAN NOT NULL DEFAULT false;
+
+-- Partial index: only tickets that are un-notified and have a deadline are
+-- interesting to the notifier query — this avoids a full table scan on every tick.
+CREATE INDEX IF NOT EXISTS idx_tickets_sla_notified
+  ON tickets(resolution_due_at)
+  WHERE sla_notified = false AND resolution_due_at IS NOT NULL;

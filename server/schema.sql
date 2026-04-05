@@ -317,3 +317,9 @@ ALTER TABLE tickets ADD COLUMN IF NOT EXISTS sla_notified BOOLEAN NOT NULL DEFAU
 CREATE INDEX IF NOT EXISTS idx_tickets_sla_notified
   ON tickets(resolution_due_at)
   WHERE sla_notified = false AND resolution_due_at IS NOT NULL;
+
+-- ── Migration: SLA notifier interval setting ─────────────────
+-- How often (in minutes) the SLA deadline notifier polls for approaching deadlines.
+-- Default 5 minutes. Admin-configurable via the Settings UI.
+INSERT INTO settings (key, value) VALUES ('sla_check_interval_minutes', '5')
+  ON CONFLICT (key) DO NOTHING;

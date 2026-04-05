@@ -126,6 +126,9 @@ async function checkSlaDeadlines() {
   }
 }
 
+let _intervalHandle = null;
+let _intervalMs = 5 * 60 * 1000; // default 5 min
+
 /**
  * startSlaNotifier(intervalMs?)
  *
@@ -134,23 +137,39 @@ async function checkSlaDeadlines() {
  *
  * @param {number} [intervalMs=300000] - Poll interval in ms (default: 5 min)
  */
-function startSlaNotifier(intervalMs = 5 * 60 * 1000) {
+function startSlaNotifier(intervalMs = _intervalMs) {
   if (!isEmailConfigured()) {
     console.log('[slaNotifier] SMTP not configured — SLA email notifications disabled');
     return;
   }
 
+  if (_intervalHandle) {
+    clearInterval(_intervalHandle);
+  }
+
+  _intervalMs = intervalMs;
   console.log(`[slaNotifier] Starting — checking every ${intervalMs / 1000}s`);
 
-  setInterval(async () => {
+  _intervalHandle = setInterval(async () => {
     try {
       await checkSlaDeadlines();
     } catch (err) {
-      // Log but keep the interval alive. A single DB hiccup shouldn't
-      // kill the notifier for the rest of the process lifetime.
       console.error('[slaNotifier] Error during SLA check:', err.message);
     }
   }, intervalMs);
 }
 
-module.exports = { startSlaNotifier };
+/**
+ * reconfigureSlaNotifier(minutes)
+ *
+ * Restarts the polling loop with a new interval. Called when an admin
+ * saves a new sla_check_interval_minutes value via the settings UI.
+ *
+ * @param {number} minutes - New poll interval in minutes
+ */
+function reconfigureSlaNotifier(minutes) {
+  const ms = Math.max(1, parseInt(minutes, 10) || 5) * 60 * 1000;
+  startSlaNotifier(ms);
+}
+
+module.exports = { startSlaNotifier, reconfigureSlaNotifier };

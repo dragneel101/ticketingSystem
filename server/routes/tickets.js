@@ -109,7 +109,7 @@ function buildTicketCreatedHtml({ ticketRef, subject, customerName, customerEmai
 
 // ── Email template: ticket reassigned ────────────────────────
 // Sent to the new assignee when a ticket's assigned_to changes.
-function buildTicketAssignedHtml({ ticketRef, subject, customerName, customerEmail, priority }) {
+function buildTicketAssignedHtml({ ticketRef, subject, customerName, customerEmail, priority, assignedByName }) {
   const escHtml = (str) => String(str || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -122,7 +122,7 @@ function buildTicketAssignedHtml({ ticketRef, subject, customerName, customerEma
         <strong style="font-size: 16px;">Ticket Assigned to You: [${escHtml(ticketRef)}]</strong>
       </div>
       <div style="border: 1px solid #e2e8f0; border-top: none; padding: 24px; border-radius: 0 0 6px 6px;">
-        <p style="margin: 0 0 16px;">A ticket has been assigned to you.</p>
+        <p style="margin: 0 0 16px;">${assignedByName ? `<strong>${escHtml(assignedByName)}</strong> has assigned a ticket to you.` : 'A ticket has been assigned to you.'}</p>
         <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
           <tr>
             <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600; width: 40%;">Ticket</td>
@@ -138,8 +138,13 @@ function buildTicketAssignedHtml({ ticketRef, subject, customerName, customerEma
           </tr>
           <tr>
             <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600;">Priority</td>
-            <td style="padding: 8px 12px; text-transform: capitalize;">${escHtml(priority)}</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; text-transform: capitalize;">${escHtml(priority)}</td>
           </tr>
+          ${assignedByName ? `
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600;">Assigned by</td>
+            <td style="padding: 8px 12px;">${escHtml(assignedByName)}</td>
+          </tr>` : ''}
         </table>
       </div>
     </div>
@@ -685,18 +690,23 @@ router.patch('/:id', async (req, res) => {
         newAssignedTo !== null &&
         newAssignedTo !== oldAssignedTo
       ) {
-        pool.query('SELECT email FROM users WHERE id = $1', [newAssignedTo]).then(({ rows: aRows }) => {
-          const assigneeEmail = aRows[0]?.email;
+        Promise.all([
+          pool.query('SELECT email FROM users WHERE id = $1', [newAssignedTo]),
+          pool.query('SELECT name FROM users WHERE id = $1', [req.session.userId]),
+        ]).then(([{ rows: aRows }, { rows: actorRows }]) => {
+          const assigneeEmail  = aRows[0]?.email;
+          const assignedByName = actorRows[0]?.name ?? null;
           if (assigneeEmail) {
             sendEmail({
               to: assigneeEmail,
               subject: `[${freshTicket.ticket_ref}] Ticket assigned to you: ${freshTicket.subject}`,
               html: buildTicketAssignedHtml({
-                ticketRef:     freshTicket.ticket_ref,
-                subject:       freshTicket.subject,
-                customerName:  freshTicket.customer_name,
-                customerEmail: freshTicket.customer_email,
-                priority:      freshTicket.priority,
+                ticketRef:      freshTicket.ticket_ref,
+                subject:        freshTicket.subject,
+                customerName:   freshTicket.customer_name,
+                customerEmail:  freshTicket.customer_email,
+                priority:       freshTicket.priority,
+                assignedByName,
               }),
             });
           }
@@ -731,7 +741,7 @@ router.patch('/:id', async (req, res) => {
 
 // ── POST /api/tickets/:id/messages ───────────────────────────
 router.post('/:id/messages', async (req, res) => {
-  const { from, text, type } = req.body;
+  const { from, text, type, notify_customer } = req.body;
 
   if (!from?.trim() || !text?.trim()) {
     return res.status(400).json({ error: 'from and text are required' });
@@ -761,7 +771,7 @@ router.post('/:id/messages', async (req, res) => {
 
     // ── Fire-and-forget customer notification ─────────────────
     // Only for non-internal messages — internal notes never surface to customers.
-    if (msgType === 'message' && isEmailConfigured()) {
+    if (msgType === 'message' && notify_customer !== false && isEmailConfigured()) {
       sendEmail({
         to: ticketRow.customer_email,
         subject: `[${ticketRow.ticket_ref}] New reply on your ticket: ${ticketRow.subject}`,

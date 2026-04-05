@@ -979,6 +979,51 @@ body {
   font-weight: 600;
 }
 
+.reply-notify-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-top: 1px solid var(--gray-100);
+  background: var(--gray-50);
+}
+
+.reply-notify-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--gray-500);
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--t-fast);
+}
+.reply-notify-toggle input[type="checkbox"] {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid var(--gray-300);
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast);
+  flex-shrink: 0;
+}
+.reply-notify-toggle input[type="checkbox"]:checked {
+  background: var(--brand);
+  border-color: var(--brand);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 10 10' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 5.5l2.5 2.5L8 3' stroke='%23fff' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-size: 10px;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.reply-notify-toggle:has(input:checked) {
+  color: var(--brand);
+}
+.reply-notify-toggle:has(input:not(:checked)) {
+  color: var(--gray-400);
+}
+
 .btn-send {
   display: flex;
   align-items: center;
@@ -5392,6 +5437,37 @@ body {
 }
 .sla-add-btn {
   align-self: flex-start;
+}
+
+/* ── SLA notifier interval form ────────────────────────────── */
+.sla-notifier-divider {
+  height: 1px;
+  background: var(--gray-100);
+  margin: 4px 0;
+}
+.sla-notifier-form {
+  padding: 4px 0 2px;
+}
+.sla-notifier-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sla-notifier-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gray-500);
+}
+.sla-notifier-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sla-notifier-unit {
+  font-size: 13px;
+  color: var(--gray-500);
 }
 
 /* ── SLA create/edit form ──────────────────────────────────── */

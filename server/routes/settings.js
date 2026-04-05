@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 const adminOnly = require('../middleware/adminOnly');
 const emailService = require('../lib/emailService');
+const { reconfigureSlaNotifier } = require('../lib/slaNotifier');
 
 // Both routes are behind adminOnly — non-admins get 403 before any DB work.
 
@@ -26,7 +27,8 @@ function buildSettingsResponse(rows) {
     smtp_user:     raw.smtp_user     ?? '',
     smtp_pass_set: Boolean(raw.smtp_pass), // true/false — never the actual value
     smtp_from:     raw.smtp_from     ?? 'noreply@supportdesk.local',
-    support_email: raw.support_email ?? '',
+    support_email:              raw.support_email ?? '',
+    sla_check_interval_minutes: parseInt(raw.sla_check_interval_minutes || '5', 10),
   };
 }
 
@@ -55,6 +57,7 @@ router.patch('/', adminOnly, async (req, res) => {
   const {
     min_password_length,
     smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, support_email,
+    sla_check_interval_minutes,
   } = req.body;
 
   const upserts = []; // collect { key, value } pairs to upsert
@@ -92,6 +95,14 @@ router.patch('/', adminOnly, async (req, res) => {
     upserts.push({ key: 'smtp_pass', value: String(smtp_pass) });
   }
 
+  if (sla_check_interval_minutes !== undefined) {
+    const parsed = parseInt(sla_check_interval_minutes, 10);
+    if (isNaN(parsed) || parsed < 1) {
+      return res.status(400).json({ error: 'sla_check_interval_minutes must be a positive integer' });
+    }
+    upserts.push({ key: 'sla_check_interval_minutes', value: String(parsed) });
+  }
+
   if (upserts.length === 0) {
     return res.status(400).json({ error: 'No valid fields to update' });
   }
@@ -124,6 +135,11 @@ router.patch('/', adminOnly, async (req, res) => {
       from:         raw.smtp_from     || 'noreply@supportdesk.local',
       supportEmail: raw.support_email || '',
     });
+
+    // Restart the SLA notifier if the interval changed.
+    if (sla_check_interval_minutes !== undefined) {
+      reconfigureSlaNotifier(parseInt(raw.sla_check_interval_minutes || '5', 10));
+    }
 
     res.json(buildSettingsResponse(rows));
   } catch (err) {

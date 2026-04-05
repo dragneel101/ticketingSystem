@@ -6,7 +6,6 @@ import SlaCountdown from './SlaCountdown';
 import { STATUS_OPTIONS, STATUS_LABELS, TERMINAL_STATUSES } from '../utils/statusConfig';
 import { useBoards } from '../context/BoardContext';
 
-const SUPPORT_EMAIL = 'support@company.com';
 
 // ── helpers ────────────────────────────────────────────────────
 
@@ -131,12 +130,13 @@ function AssigneeSelect({ id, agents, assignedTo, onChange, disabled }) {
 }
 
 // A single customer-facing or support reply bubble.
-function MessageBubble({ message }) {
-  const isSupport = message.from === SUPPORT_EMAIL;
+// customerEmail is the ticket's customer so we can tell which side each message is on.
+function MessageBubble({ message, customerEmail }) {
+  const isSupport = message.from !== customerEmail;
   const side = isSupport ? 'support' : 'customer';
   return (
     <div className={`message-group ${side}`}>
-      <span className="message-sender">{isSupport ? 'Support' : message.from}</span>
+      <span className="message-sender">{message.from}</span>
       <div className="message-bubble" role="article">{message.text}</div>
       <time className="message-time" dateTime={message.time}>{formatTime(message.time)}</time>
     </div>
@@ -158,9 +158,12 @@ function NoteBubble({ message }) {
 function CommunicationTab({ ticket, ticketId }) {
   const { addMessage } = useTickets();
   const { addToast } = useToast();
+  const { user } = useAuth();
+  const agentEmail = user?.email ?? 'support';
   const [replyText, setReplyText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [justSent, setJustSent] = useState(false);
+  const [notifyCustomer, setNotifyCustomer] = useState(true);
   const threadRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -179,7 +182,7 @@ function CommunicationTab({ ticket, ticketId }) {
     if (!text || isSending) return;
     setIsSending(true);
     try {
-      await addMessage(ticketId, { from: SUPPORT_EMAIL, text, type: 'message' });
+      await addMessage(ticketId, { from: agentEmail, text, type: 'message', notify_customer: notifyCustomer });
       setReplyText('');
       setJustSent(true);
       addToast('Reply sent', 'success');
@@ -223,7 +226,7 @@ function CommunicationTab({ ticket, ticketId }) {
           </div>
         ) : (
           messages.map((msg, i) => (
-            <MessageBubble key={`${msg.time}-${i}`} message={msg} />
+            <MessageBubble key={`${msg.time}-${i}`} message={msg} customerEmail={ticket.customerEmail} />
           ))
         )}
       </div>
@@ -241,13 +244,27 @@ function CommunicationTab({ ticket, ticketId }) {
             aria-label="Reply message"
             disabled={isSending}
           />
+          <div className="reply-notify-row">
+            <label className="reply-notify-toggle" title={notifyCustomer ? 'Customer will be notified by email' : 'Customer will NOT be notified'}>
+              <input
+                type="checkbox"
+                checked={notifyCustomer}
+                onChange={e => setNotifyCustomer(e.target.checked)}
+              />
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {notifyCustomer ? 'Email notification will be sent to client' : 'No email notification to client'}
+            </label>
+          </div>
           <div className="reply-footer">
             <span className="reply-sender-label">
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                 <circle cx="6" cy="4" r="2.5" stroke="currentColor" strokeWidth="1.2" />
                 <path d="M1.5 10.5c0-2.485 2.015-4.5 4.5-4.5s4.5 2.015 4.5 4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
               </svg>
-              Replying as <strong>{SUPPORT_EMAIL}</strong>
+              Replying as <strong>{agentEmail}</strong>
             </span>
             <button
               className="btn-send"
@@ -688,7 +705,7 @@ function AllActivityTab({ ticket }) {
     }
 
     if (item._kind === 'message') {
-      const isSupport = item.from === SUPPORT_EMAIL;
+      const isSupport = item.from !== ticket.customerEmail;
       renderedItems.push(
         <div
           key={`msg-${item.time}-${i}`}

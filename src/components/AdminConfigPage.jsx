@@ -3,6 +3,92 @@ import PasswordPolicyForm from './PasswordPolicyForm';
 import SlaAdminPanel from './SlaAdminPanel';
 import BoardsAdminPanel from './BoardsAdminPanel';
 import EmailSettingsForm from './EmailSettingsForm';
+import { useToast } from '../context/ToastContext';
+
+// Inline form — single number input to control how often the SLA notifier polls.
+function SlaNotifierSettings() {
+  const { addToast } = useToast();
+  const [intervalVal, setIntervalVal] = useState('');
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedBaseline, setSavedBaseline] = useState('');
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(data => {
+        const val = String(data.sla_check_interval_minutes ?? 5);
+        setIntervalVal(val);
+        setSavedBaseline(val);
+        setLoaded(true);
+      })
+      .catch(() => addToast('Failed to load SLA notifier settings', 'error'));
+  }, []);
+
+  const isDirty = intervalVal !== savedBaseline;
+
+  async function handleSave(e) {
+    e.preventDefault();
+    const parsed = parseInt(intervalVal, 10);
+    if (isNaN(parsed) || parsed < 1) {
+      addToast('Interval must be at least 1 minute', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sla_check_interval_minutes: parsed }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save');
+      const val = String(data.sla_check_interval_minutes);
+      setIntervalVal(val);
+      setSavedBaseline(val);
+      addToast('SLA notifier interval updated', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!loaded) return <p className="settings-loading">Loading…</p>;
+
+  return (
+    <form className="sla-notifier-form" onSubmit={handleSave}>
+      <div className="sla-notifier-field">
+        <label htmlFor="sla-interval" className="sla-notifier-label">
+          Check interval
+        </label>
+        <div className="sla-notifier-input-row">
+          <input
+            id="sla-interval"
+            type="number"
+            min="1"
+            max="1440"
+            step="1"
+            value={intervalVal}
+            onChange={e => setIntervalVal(e.target.value)}
+            className="sla-form-input sla-form-input--num"
+          />
+          <span className="sla-notifier-unit">minutes</span>
+          <button
+            type="submit"
+            className={`btn btn--sm btn--brand`}
+            disabled={!isDirty || saving}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+        <p className="sla-form-hint">
+          How often SupportDesk checks for tickets approaching their SLA resolution deadline. Changes apply immediately without a server restart.
+        </p>
+      </div>
+    </form>
+  );
+}
 
 // SVG icons — inline so there's no external dependency.
 // Each icon is a simple 20×20 path taken from a standard icon set.
@@ -169,6 +255,8 @@ export default function AdminConfigPage() {
               </div>
               <div className="sc-body">
                 <SlaAdminPanel />
+                <div className="sla-notifier-divider" />
+                <SlaNotifierSettings />
               </div>
             </div>
           </section>

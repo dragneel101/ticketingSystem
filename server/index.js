@@ -1,7 +1,7 @@
 const app = require('./app');
 const pool = require('./db');
 const { configure } = require('./lib/emailService');
-const { startSlaNotifier } = require('./lib/slaNotifier');
+const { startSlaNotifier, reconfigureSlaNotifier } = require('./lib/slaNotifier');
 
 const PORT = process.env.PORT || 3000;
 
@@ -31,6 +31,11 @@ app.listen(PORT, async () => {
         from:         raw.smtp_from     || 'noreply@supportdesk.local',
         supportEmail: raw.support_email || '',
       });
+
+      // Override notifier interval if set in DB
+      if (raw.sla_check_interval_minutes) {
+        reconfigureSlaNotifier(parseInt(raw.sla_check_interval_minutes, 10));
+      }
 
       console.log('[emailService] SMTP config loaded from database');
     }

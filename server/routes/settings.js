@@ -132,4 +132,42 @@ router.patch('/', adminOnly, async (req, res) => {
   }
 });
 
+// ── POST /api/settings/test-email ────────────────────────────
+// Sends a test email to verify SMTP configuration is working.
+// Recipient defaults to support_email setting; body `{ to }` overrides.
+// Returns { ok: true } on success, { error: '...' } on failure.
+// Unlike other send calls this one awaits so the UI can show pass/fail.
+router.post('/test-email', adminOnly, async (req, res) => {
+  if (!emailService.isEmailConfigured()) {
+    return res.status(400).json({ error: 'SMTP not configured' });
+  }
+
+  // Determine recipient: explicit `to` in body, else fall back to support_email setting
+  let recipient = req.body?.to || emailService.getSupportEmail();
+  if (!recipient) {
+    return res.status(400).json({ error: 'No recipient: provide { to } or configure support_email' });
+  }
+
+  try {
+    await emailService.sendEmailDirect({
+      to: recipient,
+      subject: 'SupportDesk — SMTP test email',
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a2e;">
+          <div style="background: #5b5ef4; color: #fff; padding: 16px 24px; border-radius: 6px 6px 0 0;">
+            <strong style="font-size: 16px;">SupportDesk SMTP Test</strong>
+          </div>
+          <div style="border: 1px solid #e2e8f0; border-top: none; padding: 24px; border-radius: 0 0 6px 6px;">
+            <p style="margin: 0;">This is a test email sent from SupportDesk to verify your SMTP configuration is working correctly.</p>
+          </div>
+        </div>
+      `,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[test-email]', err);
+    res.status(500).json({ error: err.message || 'Failed to send test email' });
+  }
+});
+
 module.exports = router;

@@ -556,16 +556,50 @@ function defaultLabel(e) {
   );
 }
 
+// ── Date separator helpers ────────────────────────────────────
+
+// Returns the calendar day string for a timestamp, used as a grouping key.
+function calendarDay(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+// Formats a timestamp into a human-readable date label:
+// "Today", "Yesterday", "Mar 15", or "Mar 15, 2025" (year shown when not current year).
+function formatDateSeparator(ts) {
+  const now = new Date();
+  const d = new Date(ts);
+  const todayKey = calendarDay(Date.now());
+  const key = calendarDay(ts);
+  const yesterdayKey = calendarDay(Date.now() - 86400000);
+
+  if (key === todayKey) return 'Today';
+  if (key === yesterdayKey) return 'Yesterday';
+
+  const opts = { month: 'short', day: 'numeric' };
+  if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric';
+  return d.toLocaleDateString([], opts);
+}
+
+const AF_FILTERS = [
+  { id: 'all',      label: 'All' },
+  { id: 'message',  label: 'Messages' },
+  { id: 'note',     label: 'Notes' },
+  { id: 'event',    label: 'Events' },
+];
+
 // ── All Activity tab ──────────────────────────────────────────
-// Merges messages and audit events into a single chronological timeline.
+// Merges messages, notes, and audit events into a single chronological timeline.
 // Read-only — agents compose in the Communication and Notes tabs.
 function AllActivityTab({ ticket }) {
-  const threadRef = useRef(null);
+  const feedRef = useRef(null);
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [showJumpBtn, setShowJumpBtn] = useState(false);
 
   // Build a unified, sorted list of activity items.
   // Each item gets a `_kind` discriminator so the renderer knows which
   // visual treatment to apply without re-checking the shape each time.
-  const items = [
+  const allItems = [
     ...(ticket.messages || []).map((m) => ({
       ...m,
       _kind: m.type === 'note' ? 'note' : 'message',
@@ -578,14 +612,48 @@ function AllActivityTab({ ticket }) {
     })),
   ].sort((a, b) => a._ts - b._ts);
 
-  // Auto-scroll to bottom when items change (same pattern as Communication/Notes tabs).
-  useEffect(() => {
-    if (threadRef.current) {
-      threadRef.current.scrollTop = threadRef.current.scrollHeight;
-    }
-  }, [items.length]);
+  // Per-filter counts shown in the segment badge.
+  const counts = {
+    all: allItems.length,
+    message: allItems.filter((i) => i._kind === 'message').length,
+    note: allItems.filter((i) => i._kind === 'note').length,
+    event: allItems.filter((i) => i._kind === 'event').length,
+  };
 
-  if (items.length === 0) {
+  // Apply active filter.
+  const items = activeFilter === 'all'
+    ? allItems
+    : allItems.filter((i) => i._kind === activeFilter);
+
+  // Scroll to bottom whenever filter changes.
+  useEffect(() => {
+    if (feedRef.current) {
+      feedRef.current.scrollTop = feedRef.current.scrollHeight;
+    }
+  }, [activeFilter]);
+
+  // Auto-scroll to bottom when new items arrive (same pattern as other tabs).
+  useEffect(() => {
+    if (feedRef.current) {
+      feedRef.current.scrollTop = feedRef.current.scrollHeight;
+    }
+  }, [allItems.length]);
+
+  // Detect how far the user has scrolled from the bottom to show/hide the jump button.
+  function handleScroll(e) {
+    const el = e.currentTarget;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowJumpBtn(distFromBottom > 100);
+  }
+
+  function jumpToLatest() {
+    if (feedRef.current) {
+      feedRef.current.scrollTo({ top: feedRef.current.scrollHeight, behavior: 'smooth' });
+    }
+    setShowJumpBtn(false);
+  }
+
+  if (allItems.length === 0) {
     return (
       <div className="tp-tab-content">
         <div className="hist-empty">
@@ -599,97 +667,153 @@ function AllActivityTab({ ticket }) {
     );
   }
 
+  // Build the rendered list with date separators injected between day boundaries.
+  // The first item always gets a separator above it.
+  const renderedItems = [];
+  let lastDayKey = null;
+
+  items.forEach((item, i) => {
+    const ts = item._ts;
+    const dayKey = calendarDay(ts);
+
+    if (dayKey !== lastDayKey) {
+      lastDayKey = dayKey;
+      renderedItems.push(
+        <div key={`sep-${dayKey}-${i}`} className="af-date-sep" aria-hidden="true">
+          <span className="af-date-sep-line" />
+          <span className="af-date-sep-label">{formatDateSeparator(ts)}</span>
+          <span className="af-date-sep-line" />
+        </div>
+      );
+    }
+
+    if (item._kind === 'message') {
+      const isSupport = item.from === SUPPORT_EMAIL;
+      renderedItems.push(
+        <div
+          key={`msg-${item.time}-${i}`}
+          className={`af-message af-message--${isSupport ? 'support' : 'customer'}`}
+          role="article"
+        >
+          <span className="af-msg-sender">
+            {isSupport ? (
+              <>
+                <span className="af-msg-dot af-msg-dot--support" aria-hidden="true" />
+                Support
+              </>
+            ) : (
+              <>
+                <span className="af-msg-dot af-msg-dot--customer" aria-hidden="true" />
+                {item.from}
+              </>
+            )}
+          </span>
+          <div className="af-msg-bubble">{item.text}</div>
+          <time className="af-msg-time" dateTime={item.time}>{formatTime(item.time)}</time>
+        </div>
+      );
+      return;
+    }
+
+    if (item._kind === 'note') {
+      renderedItems.push(
+        <div key={`note-${item.time}-${i}`} className="af-note" role="article">
+          <div className="af-note-header">
+            <svg className="af-note-icon" width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <rect x="2" y="5" width="8" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
+              <path d="M4 5V3.5a2 2 0 014 0V5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+            </svg>
+            <span className="af-note-label">Internal note</span>
+            <span className="af-note-author">{item.from}</span>
+          </div>
+          <div className="af-note-bubble">{item.text}</div>
+          <time className="af-msg-time" dateTime={item.time}>{formatTime(item.time)}</time>
+        </div>
+      );
+      return;
+    }
+
+    // Audit event — lightweight centered row, no card chrome.
+    const config = EVENT_CONFIG[item.eventType];
+    const dotClass = config?.dotClass ?? 'hist-dot--unassigned';
+    const labelNode = config ? config.label(item) : defaultLabel(item);
+
+    renderedItems.push(
+      <div key={`evt-${item.id}`} className="af-event" role="listitem">
+        <span className="af-event-line" aria-hidden="true" />
+        <span className={`hist-dot ${dotClass} af-event-dot`} aria-hidden="true" />
+        <span className="af-event-line" aria-hidden="true" />
+        <div className="af-event-body">
+          <p className="hist-label af-event-label">{labelNode}</p>
+          <time
+            className="hist-time"
+            dateTime={item.createdAt}
+            title={new Date(item.createdAt).toLocaleString()}
+          >
+            {formatRelativeTime(item.createdAt)}
+          </time>
+        </div>
+      </div>
+    );
+  });
+
   return (
     <div className="tp-tab-content tp-activity-content">
-      <div
-        className="af-feed"
-        ref={threadRef}
-        role="log"
-        aria-live="polite"
-        aria-label="All activity"
-      >
-        {items.map((item, i) => {
-          if (item._kind === 'message') {
-            const isSupport = item.from === SUPPORT_EMAIL;
-            return (
-              <div
-                key={`msg-${item.time}-${i}`}
-                className={`af-message af-message--${isSupport ? 'support' : 'customer'}`}
-                role="article"
-              >
-                <span className="af-msg-sender">
-                  {isSupport ? (
-                    <>
-                      <span className="af-msg-dot af-msg-dot--support" aria-hidden="true" />
-                      Support
-                    </>
-                  ) : (
-                    <>
-                      <span className="af-msg-dot af-msg-dot--customer" aria-hidden="true" />
-                      {item.from}
-                    </>
-                  )}
-                </span>
-                <div className="af-msg-bubble">
-                  {item.text}
-                </div>
-                <time className="af-msg-time" dateTime={item.time}>
-                  {formatTime(item.time)}
-                </time>
-              </div>
-            );
-          }
+      {/* Filter segmented control */}
+      <div className="af-filter-bar" role="group" aria-label="Filter activity">
+        {AF_FILTERS.map((f) => (
+          <button
+            key={f.id}
+            className={`af-filter-btn${activeFilter === f.id ? ' af-filter-btn--active' : ''}`}
+            onClick={() => setActiveFilter(f.id)}
+            aria-pressed={activeFilter === f.id}
+          >
+            {f.label}
+            {counts[f.id] > 0 && (
+              <span className={`af-filter-count${activeFilter === f.id ? ' af-filter-count--active' : ''}`}>
+                {counts[f.id]}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
 
-          if (item._kind === 'note') {
-            return (
-              <div
-                key={`note-${item.time}-${i}`}
-                className="af-note"
-                role="article"
-              >
-                <div className="af-note-header">
-                  {/* Lock icon — signals internal-only to agents scanning quickly */}
-                  <svg className="af-note-icon" width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                    <rect x="2" y="5" width="8" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
-                    <path d="M4 5V3.5a2 2 0 014 0V5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-                  </svg>
-                  <span className="af-note-label">Internal note</span>
-                  <span className="af-note-author">{item.from}</span>
-                </div>
-                <div className="af-note-bubble">
-                  {item.text}
-                </div>
-                <time className="af-msg-time" dateTime={item.time}>
-                  {formatTime(item.time)}
-                </time>
-              </div>
-            );
-          }
-
-          // Audit event — lightweight centered row, no card chrome.
-          // Reuses EVENT_CONFIG + defaultLabel exactly as HistoryTab does.
-          const config = EVENT_CONFIG[item.eventType];
-          const dotClass = config?.dotClass ?? 'hist-dot--unassigned';
-          const labelNode = config ? config.label(item) : defaultLabel(item);
-
-          return (
-            <div key={`evt-${item.id}`} className="af-event" role="listitem">
-              <span className="af-event-line" aria-hidden="true" />
-              <span className={`hist-dot ${dotClass} af-event-dot`} aria-hidden="true" />
-              <span className="af-event-line" aria-hidden="true" />
-              <div className="af-event-body">
-                <p className="hist-label af-event-label">{labelNode}</p>
-                <time
-                  className="hist-time"
-                  dateTime={item.createdAt}
-                  title={new Date(item.createdAt).toLocaleString()}
-                >
-                  {formatRelativeTime(item.createdAt)}
-                </time>
-              </div>
+      {/* Scrollable feed — position:relative so the jump button can anchor to it */}
+      <div style={{ position: 'relative', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div
+          className="af-feed"
+          ref={feedRef}
+          role="log"
+          aria-live="polite"
+          aria-label="All activity"
+          onScroll={handleScroll}
+        >
+          {items.length === 0 ? (
+            <div className="hist-empty" style={{ flex: 1 }}>
+              <svg width="28" height="28" viewBox="0 0 36 36" fill="none" aria-hidden="true">
+                <circle cx="18" cy="18" r="13" stroke="#cdd3de" strokeWidth="1.5" />
+                <path d="M10 18h16M18 10v16" stroke="#cdd3de" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              <span>No {activeFilter === 'all' ? 'activity' : activeFilter + 's'} to show</span>
             </div>
-          );
-        })}
+          ) : (
+            renderedItems
+          )}
+        </div>
+
+        {/* Jump to latest floating button */}
+        {showJumpBtn && (
+          <button
+            className="af-jump-btn"
+            onClick={jumpToLatest}
+            aria-label="Jump to latest activity"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Latest
+          </button>
+        )}
       </div>
 
       {/* Read-only hint — positioned below the scrollable feed */}
@@ -700,54 +824,6 @@ function AllActivityTab({ ticket }) {
         </svg>
         Use the <strong>Communication</strong> or <strong>Notes</strong> tabs to reply
       </div>
-    </div>
-  );
-}
-
-function HistoryTab({ ticket }) {
-  const events = ticket.events ?? [];
-
-  if (events.length === 0) {
-    return (
-      <div className="tp-tab-content">
-        <div className="hist-empty">
-          <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true">
-            <circle cx="18" cy="18" r="13" stroke="#cdd3de" strokeWidth="1.5" />
-            <path d="M18 11v7l4 4" stroke="#cdd3de" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span>No history yet</span>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="tp-tab-content tp-history-content">
-      <ol className="hist-timeline" aria-label="Ticket history">
-        {events.map((event) => {
-          const config = EVENT_CONFIG[event.eventType];
-          const dotClass = config?.dotClass ?? 'hist-dot--unassigned';
-          const labelNode = config ? config.label(event) : defaultLabel(event);
-
-          return (
-            <li key={event.id} className="hist-row">
-              {/* The connecting line lives as a pseudo-element on .hist-row;
-                  the dot sits on top of it, so we put it in the DOM here */}
-              <span className={`hist-dot ${dotClass}`} aria-hidden="true" />
-              <div className="hist-content">
-                <p className="hist-label">{labelNode}</p>
-                <time
-                  className="hist-time"
-                  dateTime={event.createdAt}
-                  title={new Date(event.createdAt).toLocaleString()}
-                >
-                  {formatRelativeTime(event.createdAt)}
-                </time>
-              </div>
-            </li>
-          );
-        })}
-      </ol>
     </div>
   );
 }
@@ -914,7 +990,6 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
     { id: 'communication', label: 'Communication' },
     { id: 'notes', label: 'Internal Notes' },
     { id: 'resolution', label: 'Resolution' },
-    { id: 'history', label: 'History' },
     { id: 'activity', label: 'All Activity' },
   ];
 
@@ -1135,12 +1210,6 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
                     {(ticket.messages || []).filter((m) => m.type === 'note').length}
                   </span>
                 )}
-                {/* Show event count on the History tab so agents notice activity */}
-                {tab.id === 'history' && (ticket.events ?? []).length > 0 && (
-                  <span className="tp-tab-badge">
-                    {(ticket.events ?? []).length}
-                  </span>
-                )}
                 {/* All Activity badge: total messages + events */}
                 {tab.id === 'activity' && (
                   (ticket.messages || []).length + (ticket.events ?? []).length
@@ -1173,9 +1242,6 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
             )}
             {activeTab === 'resolution' && (
               <ResolutionTab ticket={ticket} ticketId={ticketId} onUpdate={updateAndRefresh} />
-            )}
-            {activeTab === 'history' && (
-              <HistoryTab ticket={ticket} />
             )}
             {activeTab === 'activity' && (
               <AllActivityTab ticket={ticket} />

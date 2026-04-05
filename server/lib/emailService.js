@@ -137,4 +137,20 @@ async function sendEmail({ to, subject, html }) {
   }
 }
 
-module.exports = { sendEmail, isEmailConfigured, configure, getConfig, getSupportEmail };
+/**
+ * sendEmailDirect({ to, subject, html })
+ *
+ * Like sendEmail but THROWS on failure instead of swallowing the error.
+ * Only use this when the caller explicitly needs to surface delivery errors
+ * (e.g. the admin test-email endpoint). All other callers should use sendEmail.
+ */
+async function sendEmailDirect({ to, subject, html }) {
+  await getTransporter().sendMail({
+    from: _config.from,
+    to,
+    subject,
+    html,
+  });
+}
+
+module.exports = { sendEmail, sendEmailDirect, isEmailConfigured, configure, getConfig, getSupportEmail };

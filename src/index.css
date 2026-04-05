@@ -3722,30 +3722,7 @@ body {
   padding-top: 4px;
 }
 
-/* ── Ticket History ──────────────────────────────────────────── */
-
-/*
-  Layout: the History tab uses .tp-history-content (scrollable column).
-  Inside it, .hist-timeline is an ordered list where each <li> is a row with:
-    - a colored dot (position: relative, sits on the connecting line)
-    - a content block (label + timestamp)
-
-  The connecting line is a pseudo-element on each .hist-row, drawn as a thin
-  left border from the dot downward. The last row has no connecting line below
-  its dot — achieved by :last-child selector.
-*/
-
-.tp-history-content {
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--gray-200) transparent;
-}
-
-.tp-history-content::-webkit-scrollbar { width: 4px; }
-.tp-history-content::-webkit-scrollbar-thumb {
-  background: var(--gray-200);
-  border-radius: 4px;
-}
+/* ── Ticket History / Activity shared primitives ─────────────── */
 
 .hist-empty {
   display: flex;
@@ -3758,41 +3735,6 @@ body {
   font-size: 13px;
   padding: 40px 20px;
   text-align: center;
-}
-
-/* Ordered list — reset list styles, set up the left gutter for the line */
-.hist-timeline {
-  list-style: none;
-  padding: 24px 28px;
-  display: flex;
-  flex-direction: column;
-  /* No gap here — the connecting line is drawn via pseudo-element height,
-     so we control spacing through .hist-row padding instead */
-}
-
-/*
-  Each row: flex row with a fixed-width gutter on the left for the dot + line.
-  The connecting line is a pseudo-element — a 1px left border running the
-  full height of the row. The dot sits centered in the gutter, on top of the line.
-*/
-.hist-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding-bottom: 20px;
-  position: relative;
-}
-
-/* The connecting line — a thin vertical rule below each dot except the last */
-.hist-row:not(:last-child)::before {
-  content: '';
-  position: absolute;
-  /* Left offset: half of the gutter (dot is 10px wide, gap-left is 28px from list) */
-  left: 32px;             /* 28px padding + half of 10px dot = 33px; tweak to taste */
-  top: 20px;              /* starts just below the dot center */
-  bottom: 0;
-  width: 1px;
-  background: var(--gray-200);
 }
 
 /* The dot — colored circle overlaid on the connecting line */
@@ -3815,15 +3757,6 @@ body {
 .hist-dot--unassigned { background: #9aa3b5; color: #9aa3b5; }   /* muted gray */
 .hist-dot--resolution { background: #9b59b6; color: #9b59b6; }   /* purple — distinct from others */
 .hist-dot--board      { background: #10b981; color: #10b981; }   /* teal — matches scheduled/board tone */
-
-/* Right-side content block */
-.hist-content {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
 
 /* Human-readable sentence */
 .hist-label {
@@ -4113,6 +4046,120 @@ body {
 /* Inherit hist-label but center-align for the event row */
 .af-event-label {
   text-align: center;
+}
+
+/* ── Filter segmented control ────────────────────────────────── */
+.af-filter-bar {
+  display: flex;
+  gap: 4px;
+  padding: 10px 20px 0;
+  flex-shrink: 0;
+}
+
+.af-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: var(--r-full);
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+  white-space: nowrap;
+}
+
+.af-filter-btn:hover:not(.af-filter-btn--active) {
+  background: var(--gray-200);
+  color: var(--gray-800);
+}
+
+.af-filter-btn--active {
+  background: var(--brand, #5b5ef4);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(91, 94, 244, 0.25);
+}
+
+.af-filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--r-full);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--gray-200);
+  color: var(--gray-600);
+  line-height: 1;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.af-filter-count--active {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+/* ── Date separator ──────────────────────────────────────────── */
+.af-date-sep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 2px;
+  flex-shrink: 0;
+}
+
+.af-date-sep-line {
+  flex: 1;
+  height: 1px;
+  background: var(--gray-200);
+  display: block;
+}
+
+.af-date-sep-label {
+  font-size: 11px;
+  color: var(--gray-400);
+  background: var(--gray-50);
+  padding: 0 6px;
+  white-space: nowrap;
+  letter-spacing: 0.15px;
+  font-weight: 500;
+}
+
+/* ── Jump to latest button ───────────────────────────────────── */
+.af-jump-btn {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 13px;
+  border-radius: var(--r-full);
+  border: none;
+  background: var(--brand, #5b5ef4);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  animation: fadeIn 150ms var(--ease-out) both;
+  transition: background var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+  z-index: 10;
+}
+
+.af-jump-btn:hover {
+  background: var(--brand-hover, #4a4de0);
+  transform: translateY(-1px);
+}
+
+.af-jump-btn:active {
+  transform: translateY(0);
 }
 
 /* ── Read-only hint footer ────────────────────────────────── */
@@ -5446,6 +5493,9 @@ body {
 }
 .btn--brand:hover:not(:disabled) { background: var(--brand-hover); }
 .btn--brand:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn--saved,
+.btn--saved:hover { background: #10b981; color: #fff; }
+.btn--saved:disabled { opacity: 1; cursor: default; }
 .btn--ghost {
   background: var(--gray-100);
   color: var(--gray-600);
@@ -5612,10 +5662,84 @@ body {
 
 .email-settings-footer {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 0.75rem;
   padding-top: 1rem;
   border-top: 1px solid var(--gray-100);
 }
+
+/* ── Test email row (To: input + button) ───────────────────── */
+.esf-test-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-right: auto;
+}
+.esf-test-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  white-space: nowrap;
+}
+.esf-test-input {
+  height: 36px;
+  padding: 0 0.625rem;
+  font-size: 0.8125rem;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-sm);
+  color: var(--gray-800);
+  background: #fff;
+  width: 220px;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.esf-test-input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand-light);
+}
+.esf-test-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Test email button ──────────────────────────────────────── */
+.esf-test-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 1rem;
+  height: 36px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--gray-200);
+  background: #fff;
+  color: var(--gray-600);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+.esf-test-btn:hover:not(:disabled) {
+  background: var(--gray-50);
+  border-color: var(--gray-300);
+  color: var(--gray-800);
+}
+.esf-test-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.esf-test-btn--ok {
+  background: #10b981;
+  border-color: #10b981;
+  color: #fff;
+}
+.esf-test-btn--ok:hover:not(:disabled) { background: #059669; border-color: #059669; }
+.esf-test-btn--fail {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #fff;
+}
+.esf-test-btn--fail:hover:not(:disabled) { background: #dc2626; border-color: #dc2626; }
 
 /* ── Email settings save button states ───────────────────────── */
 

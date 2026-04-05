@@ -18,7 +18,11 @@ export default function EmailSettingsForm() {
   // We never receive the actual password from the API.
   const [passSet, setPassSet] = useState(false);
 
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]       = useState(false);
+  const [testing, setTesting]     = useState(false);
+  const [testState, setTestState] = useState('idle');
+  const [testTo, setTestTo]       = useState('');
+  const testTimerRef = useRef(null);
 
   // Snapshot of last-saved values (excludes pass — see constraints).
   // Populated after initial load and after each successful save.
@@ -55,6 +59,7 @@ export default function EmailSettingsForm() {
         setUser(loadedUser);
         setFrom(loadedFrom);
         setSupportEmail(loadedSupportEmail);
+        setTestTo(loadedSupportEmail);
         setPassSet(Boolean(data.smtp_pass_set));
 
         // Capture baseline for dirty tracking.
@@ -73,9 +78,10 @@ export default function EmailSettingsForm() {
     }
     load();
 
-    // Cleanup any pending saved-flash timer on unmount.
+    // Cleanup any pending timers on unmount.
     return () => {
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      if (testTimerRef.current)  clearTimeout(testTimerRef.current);
     };
   }, []);
 
@@ -130,6 +136,30 @@ export default function EmailSettingsForm() {
       addToast(err.message, 'error');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleTestEmail() {
+    if (testing) return;
+    setTesting(true);
+    setTestState('sending');
+    try {
+      const res = await fetch('/api/settings/test-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(testTo.trim() ? { to: testTo.trim() } : {}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Test failed');
+      setTestState('ok');
+      addToast('Test email sent successfully', 'success');
+    } catch (err) {
+      setTestState('fail');
+      addToast(err.message, 'error');
+    } finally {
+      setTesting(false);
+      if (testTimerRef.current) clearTimeout(testTimerRef.current);
+      testTimerRef.current = setTimeout(() => setTestState('idle'), 3000);
     }
   }
 
@@ -236,55 +266,76 @@ export default function EmailSettingsForm() {
       </div>
 
       <div className="email-settings-footer">
+        <div className="esf-test-row">
+          <label htmlFor="test-to" className="esf-test-label">To</label>
+          <input
+            id="test-to"
+            type="email"
+            className="esf-test-input"
+            value={testTo}
+            onChange={e => setTestTo(e.target.value)}
+            placeholder="recipient@example.com"
+            disabled={testing || isDirty}
+          />
+          <button
+            type="button"
+            className={`esf-test-btn${testState === 'ok' ? ' esf-test-btn--ok' : testState === 'fail' ? ' esf-test-btn--fail' : ''}`}
+            onClick={handleTestEmail}
+            disabled={testing || isDirty || !testTo.trim()}
+            title={isDirty ? 'Save changes before sending a test' : ''}
+          >
+          {testState === 'sending' ? (
+            <>
+              <svg className="esf-spinner" width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <circle cx="7" cy="7" r="5.5" stroke="rgba(255,255,255,0.35)" strokeWidth="2" />
+                <path d="M7 1.5 A5.5 5.5 0 0 1 12.5 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              Sending…
+            </>
+          ) : testState === 'ok' ? (
+            <>
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M2.5 7.5 L5.5 10.5 L11.5 4" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Sent
+            </>
+          ) : testState === 'fail' ? (
+            <>
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M3 3l8 8M11 3l-8 8" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              Failed
+            </>
+          ) : (
+            <>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Send Test Email
+            </>
+          )}
+        </button>
+        </div>
+
         <button
           type="submit"
-          className={`btn-primary${saved ? ' btn-primary--saved' : ''}`}
+          className={`btn btn--sm${saved ? ' btn--saved' : ' btn--brand'}`}
           disabled={!isDirty || saving}
           aria-label={saving ? 'Saving changes' : saved ? 'Changes saved' : 'Save changes'}
         >
           {saving ? (
             <>
-              <svg
-                className="esf-spinner"
-                width="14"
-                height="14"
-                viewBox="0 0 14 14"
-                fill="none"
-                aria-hidden="true"
-              >
-                <circle
-                  cx="7"
-                  cy="7"
-                  r="5.5"
-                  stroke="rgba(255,255,255,0.35)"
-                  strokeWidth="2"
-                />
-                <path
-                  d="M7 1.5 A5.5 5.5 0 0 1 12.5 7"
-                  stroke="#fff"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
+              <svg className="esf-spinner" width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <circle cx="7" cy="7" r="5.5" stroke="rgba(255,255,255,0.35)" strokeWidth="2" />
+                <path d="M7 1.5 A5.5 5.5 0 0 1 12.5 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
               </svg>
               Saving…
             </>
           ) : saved ? (
             <>
-              <svg
-                className="esf-check"
-                width="14"
-                height="14"
-                viewBox="0 0 14 14"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  d="M2.5 7.5 L5.5 10.5 L11.5 4"
-                  stroke="#fff"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+              <svg className="esf-check" width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M2.5 7.5 L5.5 10.5 L11.5 4" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               Saved
             </>

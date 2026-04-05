@@ -107,6 +107,116 @@ function buildTicketCreatedHtml({ ticketRef, subject, customerName, customerEmai
   `;
 }
 
+// ── Email template: ticket reassigned ────────────────────────
+// Sent to the new assignee when a ticket's assigned_to changes.
+function buildTicketAssignedHtml({ ticketRef, subject, customerName, customerEmail, priority }) {
+  const escHtml = (str) => String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a2e;">
+      <div style="background: #5b5ef4; color: #fff; padding: 16px 24px; border-radius: 6px 6px 0 0;">
+        <strong style="font-size: 16px;">Ticket Assigned to You: [${escHtml(ticketRef)}]</strong>
+      </div>
+      <div style="border: 1px solid #e2e8f0; border-top: none; padding: 24px; border-radius: 0 0 6px 6px;">
+        <p style="margin: 0 0 16px;">A ticket has been assigned to you.</p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600; width: 40%;">Ticket</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${escHtml(ticketRef)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600;">Customer</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${escHtml(customerName)} (${escHtml(customerEmail)})</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600;">Subject</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${escHtml(subject)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600;">Priority</td>
+            <td style="padding: 8px 12px; text-transform: capitalize;">${escHtml(priority)}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ── Email template: status changed ───────────────────────────
+// Sent to the customer when a ticket's status changes.
+function buildStatusChangedHtml({ ticketRef, subject, customerName, oldStatus, newStatus }) {
+  const escHtml = (str) => String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a2e;">
+      <div style="background: #5b5ef4; color: #fff; padding: 16px 24px; border-radius: 6px 6px 0 0;">
+        <strong style="font-size: 16px;">Ticket Status Updated: [${escHtml(ticketRef)}]</strong>
+      </div>
+      <div style="border: 1px solid #e2e8f0; border-top: none; padding: 24px; border-radius: 0 0 6px 6px;">
+        <p style="margin: 0 0 16px;">Hi ${escHtml(customerName)}, the status of your support ticket has been updated.</p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600; width: 40%;">Ticket</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${escHtml(ticketRef)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600;">Subject</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${escHtml(subject)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600;">Previous Status</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0; text-transform: capitalize;">${escHtml(oldStatus)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600;">New Status</td>
+            <td style="padding: 8px 12px; text-transform: capitalize;">${escHtml(newStatus)}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// ── Email template: new reply ─────────────────────────────────
+// Sent to the customer when a non-internal message is posted on their ticket.
+function buildNewReplyHtml({ ticketRef, subject, customerName, replyText }) {
+  const escHtml = (str) => String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a2e;">
+      <div style="background: #5b5ef4; color: #fff; padding: 16px 24px; border-radius: 6px 6px 0 0;">
+        <strong style="font-size: 16px;">New Reply on Your Ticket: [${escHtml(ticketRef)}]</strong>
+      </div>
+      <div style="border: 1px solid #e2e8f0; border-top: none; padding: 24px; border-radius: 0 0 6px 6px;">
+        <p style="margin: 0 0 16px;">Hi ${escHtml(customerName)}, a new reply has been posted on your support ticket.</p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600; width: 40%;">Ticket</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${escHtml(ticketRef)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; background: #f7fafc; font-weight: 600;">Subject</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${escHtml(subject)}</td>
+          </tr>
+        </table>
+        <div style="margin-top: 20px; padding: 16px; background: #f7fafc; border-left: 3px solid #5b5ef4; border-radius: 0 4px 4px 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap;">${escHtml(replyText)}</div>
+      </div>
+    </div>
+  `;
+}
+
 // ── GET /api/tickets ──────────────────────────────────────────
 // Optional query params: ?status=open&priority=high&page=1&limit=25
 router.get('/', async (req, res) => {
@@ -562,6 +672,53 @@ router.patch('/:id', async (req, res) => {
        WHERE t.id = $1`,
       [old.id]
     );
+
+    // ── Fire-and-forget email notifications ───────────────────
+    if (isEmailConfigured()) {
+      const freshTicket = joined[0];
+
+      // Reassignment: notify the new assignee when assigned_to changes to a non-null value
+      const oldAssignedTo = old.assigned_to ?? null;
+      const newAssignedTo = updates.assigned_to !== undefined ? updates.assigned_to : oldAssignedTo;
+      if (
+        updates.assigned_to !== undefined &&
+        newAssignedTo !== null &&
+        newAssignedTo !== oldAssignedTo
+      ) {
+        pool.query('SELECT email FROM users WHERE id = $1', [newAssignedTo]).then(({ rows: aRows }) => {
+          const assigneeEmail = aRows[0]?.email;
+          if (assigneeEmail) {
+            sendEmail({
+              to: assigneeEmail,
+              subject: `[${freshTicket.ticket_ref}] Ticket assigned to you: ${freshTicket.subject}`,
+              html: buildTicketAssignedHtml({
+                ticketRef:     freshTicket.ticket_ref,
+                subject:       freshTicket.subject,
+                customerName:  freshTicket.customer_name,
+                customerEmail: freshTicket.customer_email,
+                priority:      freshTicket.priority,
+              }),
+            });
+          }
+        }).catch(() => {});
+      }
+
+      // Status change: notify the customer when status changes
+      if (updates.status !== undefined && updates.status !== old.status) {
+        sendEmail({
+          to: freshTicket.customer_email,
+          subject: `[${freshTicket.ticket_ref}] Your ticket status has been updated`,
+          html: buildStatusChangedHtml({
+            ticketRef:    freshTicket.ticket_ref,
+            subject:      freshTicket.subject,
+            customerName: freshTicket.customer_name,
+            oldStatus:    old.status,
+            newStatus:    updates.status,
+          }),
+        });
+      }
+    }
+
     res.json(formatTicket(joined[0]));
   } catch (err) {
     await client.query('ROLLBACK');
@@ -586,19 +743,36 @@ router.post('/:id/messages', async (req, res) => {
 
   try {
     const { rows: ticketRows } = await pool.query(
-      'SELECT id FROM tickets WHERE ticket_ref = $1',
+      'SELECT id, ticket_ref, subject, customer_email, customer_name FROM tickets WHERE ticket_ref = $1',
       [req.params.id]
     );
     if (ticketRows.length === 0) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
 
+    const ticketRow = ticketRows[0];
+
     const { rows } = await pool.query(
       `INSERT INTO messages (ticket_id, from_addr, body, type)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [ticketRows[0].id, from.trim(), text.trim(), msgType]
+      [ticketRow.id, from.trim(), text.trim(), msgType]
     );
+
+    // ── Fire-and-forget customer notification ─────────────────
+    // Only for non-internal messages — internal notes never surface to customers.
+    if (msgType === 'message' && isEmailConfigured()) {
+      sendEmail({
+        to: ticketRow.customer_email,
+        subject: `[${ticketRow.ticket_ref}] New reply on your ticket: ${ticketRow.subject}`,
+        html: buildNewReplyHtml({
+          ticketRef:    ticketRow.ticket_ref,
+          subject:      ticketRow.subject,
+          customerName: ticketRow.customer_name,
+          replyText:    text.trim(),
+        }),
+      });
+    }
 
     const msg = rows[0];
     res.status(201).json({

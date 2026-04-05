@@ -869,9 +869,12 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
   // navigates back and selects a different ticket (because key={ticketId}
   // causes a full remount).
   const [activeTab, setActiveTab] = useState('communication');
-  const [isAssigning, setIsAssigning] = useState(false);
   const [agents, setAgents] = useState([]);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  // Buffered edits — null means no unsaved changes. Fields are merged in as
+  // the user touches each select; Save commits them all in one PATCH.
+  const [draft, setDraft] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const ticket = tickets.find((t) => t.id === ticketId);
 
@@ -890,62 +893,41 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Optimistic update helpers — apply the change locally first for instant
-  // feedback, then confirm with the server. On error, roll back to the
-  // snapshot taken before the optimistic write.
-  async function handleStatusChange(newStatus) {
-    const prev = ticket.status;
-    // Optimistic: update context immediately so the badge/select reflects the
-    // new value without waiting for the network round-trip.
-    setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, status: newStatus } : t));
-    try {
-      await updateAndRefresh(ticketId, { status: newStatus });
-      addToast(`Status → ${STATUS_LABELS[newStatus] ?? newStatus}`, 'info');
-    } catch {
-      // Roll back to previous value on failure.
-      setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, status: prev } : t));
-      addToast('Failed to update status', 'error');
-    }
+  // Merges a single field into the draft, seeding from the current saved
+  // ticket values so we always have a complete snapshot ready to diff on save.
+  function setDraftField(field, value) {
+    setDraft((prev) => ({
+      status:     ticket.status,
+      priority:   ticket.priority,
+      boardId:    ticket.boardId,
+      assignedTo: ticket.assignedTo,
+      ...(prev || {}),
+      [field]: value,
+    }));
   }
 
-  async function handlePriorityChange(newPriority) {
-    const prev = ticket.priority;
-    setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, priority: newPriority } : t));
-    try {
-      await updateAndRefresh(ticketId, { priority: newPriority });
-      addToast(`Priority → ${newPriority}`, 'info');
-    } catch {
-      setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, priority: prev } : t));
-      addToast('Failed to update priority', 'error');
-    }
-  }
+  function handleStatusChange(val)   { setDraftField('status', val); }
+  function handlePriorityChange(val) { setDraftField('priority', val); }
+  function handleBoardChange(val)    { setDraftField('boardId', val ? parseInt(val, 10) : null); }
+  function handleAssigneeChange(val) { setDraftField('assignedTo', val); }
 
-  async function handleBoardChange(newBoardId) {
-    const prev = ticket.boardId;
-    const parsedId = newBoardId ? parseInt(newBoardId, 10) : null;
-    setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, boardId: parsedId } : t));
+  // Commits only the fields that actually changed to avoid no-op PATCHes.
+  async function handleSave() {
+    if (!draft || isSaving) return;
+    setIsSaving(true);
+    const changes = {};
+    if (draft.status     !== ticket.status)     changes.status      = draft.status;
+    if (draft.priority   !== ticket.priority)   changes.priority    = draft.priority;
+    if (draft.boardId    !== ticket.boardId)     changes.board_id    = draft.boardId;
+    if (draft.assignedTo !== ticket.assignedTo) changes.assigned_to = draft.assignedTo;
     try {
-      await updateAndRefresh(ticketId, { board_id: parsedId });
-      addToast('Board updated', 'info');
+      await updateAndRefresh(ticketId, changes);
+      setDraft(null);
+      addToast('Changes saved', 'success');
     } catch {
-      setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, boardId: prev } : t));
-      addToast('Failed to update board', 'error');
-    }
-  }
-
-  async function handleAssigneeChange(userId) {
-    const prev = ticket.assignedTo;
-    setIsAssigning(true);
-    setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, assignedTo: userId } : t));
-    try {
-      await updateAndRefresh(ticketId, { assigned_to: userId });
-      const agent = agents.find((a) => a.id === userId);
-      addToast(userId === null ? 'Ticket unassigned' : `Assigned to ${agent?.name ?? 'agent'}`, userId === null ? 'info' : 'success');
-    } catch {
-      setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, assignedTo: prev } : t));
-      addToast('Failed to update assignment', 'error');
+      addToast('Failed to save changes', 'error');
     } finally {
-      setIsAssigning(false);
+      setIsSaving(false);
     }
   }
 
@@ -1031,21 +1013,21 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
           <ControlSelect
             id={`status-${ticketId}`}
             label="Status"
-            value={ticket.status}
+            value={draft?.status ?? ticket.status}
             options={STATUS_OPTIONS}
             onChange={handleStatusChange}
           />
           <ControlSelect
             id={`priority-${ticketId}`}
             label="Priority"
-            value={ticket.priority}
+            value={draft?.priority ?? ticket.priority}
             options={PRIORITY_OPTIONS}
             onChange={handlePriorityChange}
           />
           <ControlSelect
             id={`board-${ticketId}`}
             label="Board"
-            value={String(ticket.boardId || '')}
+            value={String(draft !== null ? (draft.boardId ?? '') : (ticket.boardId || ''))}
             options={[
               { value: '', label: '— No board —' },
               ...boards.map((b) => ({ value: String(b.id), label: b.name })),
@@ -1055,10 +1037,29 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
           <AssigneeSelect
             id={`assignee-${ticketId}`}
             agents={agents}
-            assignedTo={ticket.assignedTo}
+            assignedTo={draft !== null ? draft.assignedTo : ticket.assignedTo}
             onChange={handleAssigneeChange}
-            disabled={isAssigning}
+            disabled={isSaving}
           />
+          {draft && (
+            <button
+              className="btn-save-ticket"
+              onClick={handleSave}
+              disabled={isSaving}
+              aria-label="Save changes"
+            >
+              {isSaving ? (
+                'Saving…'
+              ) : (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                    <path d="M2 7l3.5 3.5L11 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Save
+                </>
+              )}
+            </button>
+          )}
           {user?.role === 'admin' && (
             deleteConfirm ? (
               <div className="tp-delete-confirm">

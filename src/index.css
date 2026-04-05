@@ -1937,6 +1937,32 @@ body {
   white-space: nowrap;
 }
 
+/* ── Save ticket button ─────────────────────────────────── */
+.btn-save-ticket {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--brand);
+  border: 1px solid var(--brand);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background var(--t-fast), border-color var(--t-fast), opacity var(--t-fast);
+}
+
+.btn-save-ticket:hover:not(:disabled) {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+}
+
+.btn-save-ticket:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ── Delete ticket button ───────────────────────────────── */
 .btn-delete-ticket {
   display: flex;

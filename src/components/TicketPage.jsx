@@ -556,6 +556,154 @@ function defaultLabel(e) {
   );
 }
 
+// ── All Activity tab ──────────────────────────────────────────
+// Merges messages and audit events into a single chronological timeline.
+// Read-only — agents compose in the Communication and Notes tabs.
+function AllActivityTab({ ticket }) {
+  const threadRef = useRef(null);
+
+  // Build a unified, sorted list of activity items.
+  // Each item gets a `_kind` discriminator so the renderer knows which
+  // visual treatment to apply without re-checking the shape each time.
+  const items = [
+    ...(ticket.messages || []).map((m) => ({
+      ...m,
+      _kind: m.type === 'note' ? 'note' : 'message',
+      _ts: new Date(m.time).getTime(),
+    })),
+    ...(ticket.events || []).map((e) => ({
+      ...e,
+      _kind: 'event',
+      _ts: new Date(e.createdAt).getTime(),
+    })),
+  ].sort((a, b) => a._ts - b._ts);
+
+  // Auto-scroll to bottom when items change (same pattern as Communication/Notes tabs).
+  useEffect(() => {
+    if (threadRef.current) {
+      threadRef.current.scrollTop = threadRef.current.scrollHeight;
+    }
+  }, [items.length]);
+
+  if (items.length === 0) {
+    return (
+      <div className="tp-tab-content">
+        <div className="hist-empty">
+          <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true">
+            <circle cx="18" cy="18" r="13" stroke="#cdd3de" strokeWidth="1.5" />
+            <path d="M10 18h16M18 10v16" stroke="#cdd3de" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <span>No activity yet</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="tp-tab-content tp-activity-content">
+      <div
+        className="af-feed"
+        ref={threadRef}
+        role="log"
+        aria-live="polite"
+        aria-label="All activity"
+      >
+        {items.map((item, i) => {
+          if (item._kind === 'message') {
+            const isSupport = item.from === SUPPORT_EMAIL;
+            return (
+              <div
+                key={`msg-${item.time}-${i}`}
+                className={`af-message af-message--${isSupport ? 'support' : 'customer'}`}
+                role="article"
+              >
+                <span className="af-msg-sender">
+                  {isSupport ? (
+                    <>
+                      <span className="af-msg-dot af-msg-dot--support" aria-hidden="true" />
+                      Support
+                    </>
+                  ) : (
+                    <>
+                      <span className="af-msg-dot af-msg-dot--customer" aria-hidden="true" />
+                      {item.from}
+                    </>
+                  )}
+                </span>
+                <div className="af-msg-bubble">
+                  {item.text}
+                </div>
+                <time className="af-msg-time" dateTime={item.time}>
+                  {formatTime(item.time)}
+                </time>
+              </div>
+            );
+          }
+
+          if (item._kind === 'note') {
+            return (
+              <div
+                key={`note-${item.time}-${i}`}
+                className="af-note"
+                role="article"
+              >
+                <div className="af-note-header">
+                  {/* Lock icon — signals internal-only to agents scanning quickly */}
+                  <svg className="af-note-icon" width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                    <rect x="2" y="5" width="8" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
+                    <path d="M4 5V3.5a2 2 0 014 0V5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+                  </svg>
+                  <span className="af-note-label">Internal note</span>
+                  <span className="af-note-author">{item.from}</span>
+                </div>
+                <div className="af-note-bubble">
+                  {item.text}
+                </div>
+                <time className="af-msg-time" dateTime={item.time}>
+                  {formatTime(item.time)}
+                </time>
+              </div>
+            );
+          }
+
+          // Audit event — lightweight centered row, no card chrome.
+          // Reuses EVENT_CONFIG + defaultLabel exactly as HistoryTab does.
+          const config = EVENT_CONFIG[item.eventType];
+          const dotClass = config?.dotClass ?? 'hist-dot--unassigned';
+          const labelNode = config ? config.label(item) : defaultLabel(item);
+
+          return (
+            <div key={`evt-${item.id}`} className="af-event" role="listitem">
+              <span className="af-event-line" aria-hidden="true" />
+              <span className={`hist-dot ${dotClass} af-event-dot`} aria-hidden="true" />
+              <span className="af-event-line" aria-hidden="true" />
+              <div className="af-event-body">
+                <p className="hist-label af-event-label">{labelNode}</p>
+                <time
+                  className="hist-time"
+                  dateTime={item.createdAt}
+                  title={new Date(item.createdAt).toLocaleString()}
+                >
+                  {formatRelativeTime(item.createdAt)}
+                </time>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Read-only hint — positioned below the scrollable feed */}
+      <div className="af-readonly-hint" aria-label="Composing hint">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M6 5.5v3M6 4h.01" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+        Use the <strong>Communication</strong> or <strong>Notes</strong> tabs to reply
+      </div>
+    </div>
+  );
+}
+
 function HistoryTab({ ticket }) {
   const events = ticket.events ?? [];
 
@@ -608,7 +756,7 @@ function HistoryTab({ ticket }) {
 // This replaces the old TicketDetail — it takes over the full main content
 // area. onBack() resets the view to the ticket list.
 export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
-  const { tickets, loadTicket, updateTicket, deleteTicket } = useTickets();
+  const { tickets, setTickets, loadTicket, updateTicket, deleteTicket } = useTickets();
 
   // Thin wrapper: patch the ticket then immediately re-fetch so the History tab
   // shows the newly-inserted event without requiring a manual page reload.
@@ -630,6 +778,7 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
   const [activeTab, setActiveTab] = useState('communication');
   const [isAssigning, setIsAssigning] = useState(false);
   const [agents, setAgents] = useState([]);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   const ticket = tickets.find((t) => t.id === ticketId);
 
@@ -648,40 +797,59 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Optimistic update helpers — apply the change locally first for instant
+  // feedback, then confirm with the server. On error, roll back to the
+  // snapshot taken before the optimistic write.
   async function handleStatusChange(newStatus) {
+    const prev = ticket.status;
+    // Optimistic: update context immediately so the badge/select reflects the
+    // new value without waiting for the network round-trip.
+    setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, status: newStatus } : t));
     try {
       await updateAndRefresh(ticketId, { status: newStatus });
-      addToast(`Status changed to ${newStatus}`, 'info');
+      addToast(`Status → ${STATUS_LABELS[newStatus] ?? newStatus}`, 'info');
     } catch {
+      // Roll back to previous value on failure.
+      setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, status: prev } : t));
       addToast('Failed to update status', 'error');
     }
   }
 
   async function handlePriorityChange(newPriority) {
+    const prev = ticket.priority;
+    setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, priority: newPriority } : t));
     try {
       await updateAndRefresh(ticketId, { priority: newPriority });
-      addToast(`Priority changed to ${newPriority}`, 'info');
+      addToast(`Priority → ${newPriority}`, 'info');
     } catch {
+      setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, priority: prev } : t));
       addToast('Failed to update priority', 'error');
     }
   }
 
   async function handleBoardChange(newBoardId) {
+    const prev = ticket.boardId;
+    const parsedId = newBoardId ? parseInt(newBoardId, 10) : null;
+    setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, boardId: parsedId } : t));
     try {
-      await updateAndRefresh(ticketId, { board_id: newBoardId ? parseInt(newBoardId, 10) : null });
+      await updateAndRefresh(ticketId, { board_id: parsedId });
       addToast('Board updated', 'info');
     } catch {
+      setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, boardId: prev } : t));
       addToast('Failed to update board', 'error');
     }
   }
 
   async function handleAssigneeChange(userId) {
+    const prev = ticket.assignedTo;
     setIsAssigning(true);
+    setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, assignedTo: userId } : t));
     try {
       await updateAndRefresh(ticketId, { assigned_to: userId });
       const agent = agents.find((a) => a.id === userId);
       addToast(userId === null ? 'Ticket unassigned' : `Assigned to ${agent?.name ?? 'agent'}`, userId === null ? 'info' : 'success');
     } catch {
+      setTickets((ts) => ts.map((t) => t.id === ticketId ? { ...t, assignedTo: prev } : t));
       addToast('Failed to update assignment', 'error');
     } finally {
       setIsAssigning(false);
@@ -689,23 +857,65 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
   }
 
   async function handleDelete() {
-    if (!window.confirm(`Delete ticket ${ticketId}? This cannot be undone.`)) return;
+    if (!deleteConfirm) {
+      setDeleteConfirm(true);
+      return;
+    }
     try {
       await deleteTicket(ticketId);
       addToast(`Ticket ${ticketId} deleted`, 'info');
-      onBack(); // Return to list after deletion — ticket no longer exists
+      onBack();
     } catch {
       addToast('Failed to delete ticket', 'error');
+      setDeleteConfirm(false);
     }
   }
 
-  if (!ticket) return null;
+  // While the ticket hasn't loaded into context yet, show a skeleton.
+  // This happens on first mount when loadTicket() is still in-flight.
+  if (!ticket) {
+    return (
+      <div className="tp-page tp-page--loading" role="main" aria-label="Loading ticket">
+        <div className="tp-skeleton-header">
+          <span className="tp-skeleton-block" style={{ width: 80 }} />
+          <span className="tp-skeleton-block" style={{ width: 200 }} />
+        </div>
+        <div className="tp-body">
+          <aside className="tp-sidebar">
+            <div className="tp-card">
+              {[100, 140, 100, 80].map((w, i) => (
+                <span key={i} className="tp-skeleton-block" style={{ width: w, marginBottom: 12 }} />
+              ))}
+            </div>
+            <div className="tp-card">
+              {[120, 90, 110, 95, 130].map((w, i) => (
+                <span key={i} className="tp-skeleton-block" style={{ width: w, marginBottom: 12 }} />
+              ))}
+            </div>
+          </aside>
+          <div className="tp-main">
+            <div className="tp-skeleton-tab-bar">
+              {[100, 110, 90, 70, 95].map((w, i) => (
+                <span key={i} className="tp-skeleton-block" style={{ width: w }} />
+              ))}
+            </div>
+            <div className="tp-skeleton-thread">
+              {[260, 180, 320, 200].map((w, i) => (
+                <span key={i} className="tp-skeleton-bubble" style={{ width: w, alignSelf: i % 2 === 1 ? 'flex-end' : 'flex-start' }} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const tabs = [
     { id: 'communication', label: 'Communication' },
     { id: 'notes', label: 'Internal Notes' },
     { id: 'resolution', label: 'Resolution' },
     { id: 'history', label: 'History' },
+    { id: 'activity', label: 'All Activity' },
   ];
 
   return (
@@ -758,12 +968,30 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
             disabled={isAssigning}
           />
           {user?.role === 'admin' && (
-            <button className="btn-delete-ticket" onClick={handleDelete} aria-label="Delete ticket">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3.5 3.5l.75 8h5.5l.75-8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Delete
-            </button>
+            deleteConfirm ? (
+              <div className="tp-delete-confirm">
+                <span className="tp-delete-confirm-label">Delete ticket?</span>
+                <button
+                  className="btn-action-cancel"
+                  onClick={() => setDeleteConfirm(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn-action-danger"
+                  onClick={handleDelete}
+                >
+                  Delete
+                </button>
+              </div>
+            ) : (
+              <button className="btn-delete-ticket" onClick={handleDelete} aria-label="Delete ticket">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <path d="M2 3.5h10M5.5 3.5V2.5h3v1M3.5 3.5l.75 8h5.5l.75-8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Delete
+              </button>
+            )
           )}
         </div>
       </header>
@@ -913,6 +1141,14 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
                     {(ticket.events ?? []).length}
                   </span>
                 )}
+                {/* All Activity badge: total messages + events */}
+                {tab.id === 'activity' && (
+                  (ticket.messages || []).length + (ticket.events ?? []).length
+                ) > 0 && (
+                  <span className="tp-tab-badge">
+                    {(ticket.messages || []).length + (ticket.events ?? []).length}
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -940,6 +1176,9 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
             )}
             {activeTab === 'history' && (
               <HistoryTab ticket={ticket} />
+            )}
+            {activeTab === 'activity' && (
+              <AllActivityTab ticket={ticket} />
             )}
           </div>
         </div>

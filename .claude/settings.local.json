@@ -9,7 +9,9 @@
       "Bash(node --check server/routes/customers.js)",
       "Bash(node --check server/app.js)",
       "Bash(node -e \"require\\(''./node_modules/recharts/package.json''\\)\")",
-      "Bash(npx jest:*)"
+      "Bash(npx jest:*)",
+      "Read(//c/Users/raish/.claude/plugins/cache/claude-plugins-official/**)",
+      "Read(//c/Users/raish/.claude/plugins/marketplaces/claude-plugins-official/**)"
     ]
   }
 }

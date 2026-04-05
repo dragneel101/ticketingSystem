@@ -91,7 +91,7 @@ export function TicketProvider({ children }) {
 
   return (
     <TicketContext.Provider
-      value={{ tickets, loading, meta, loadTicket, addTicket, updateTicket, addMessage, deleteTicket, loadMoreTickets }}
+      value={{ tickets, setTickets, loading, meta, loadTicket, addTicket, updateTicket, addMessage, deleteTicket, loadMoreTickets }}
     >
       {children}
     </TicketContext.Provider>

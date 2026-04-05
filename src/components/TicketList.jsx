@@ -158,9 +158,22 @@ function SortIcons({ colKey, sortKey, sortDir }) {
   );
 }
 
+/* ── skeleton row ─────────────────────────────────────────── */
+function SkeletonRows({ colCount }) {
+  return Array.from({ length: 8 }, (_, i) => (
+    <tr key={i} className="tl-tr tl-tr--skeleton" aria-hidden="true">
+      {Array.from({ length: colCount }, (__, j) => (
+        <td key={j} className="tl-td">
+          <span className="tl-skeleton-cell" style={{ width: j === 1 ? '80%' : j === 0 ? '60%' : '55%' }} />
+        </td>
+      ))}
+    </tr>
+  ));
+}
+
 /* ── main component ──────────────────────────────────────── */
 export default function TicketList({ selectedId, onSelect, onNewTicket }) {
-  const { tickets, meta, loadMoreTickets } = useTickets();
+  const { tickets, meta, loadMoreTickets, loading } = useTickets();
   const { user } = useAuth();
   const { boards } = useBoards();
   const [loadingMore, setLoadingMore] = useState(false);
@@ -566,12 +579,38 @@ export default function TicketList({ selectedId, onSelect, onNewTicket }) {
           </thead>
 
           <tbody>
-            {sorted.length === 0 ? (
+            {loading ? (
+              <SkeletonRows colCount={colOrder.length} />
+            ) : sorted.length === 0 ? (
               <tr>
                 <td colSpan={colOrder.length} className="tl-td-empty">
-                  {hasActiveFilters
-                    ? 'No tickets match your filters.'
-                    : 'No tickets yet.'}
+                  {hasActiveFilters ? (
+                    <div className="tl-empty-state">
+                      <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+                        <circle cx="18" cy="18" r="11" stroke="var(--gray-300)" strokeWidth="1.5" />
+                        <path d="M27 27l5 5" stroke="var(--gray-300)" strokeWidth="1.5" strokeLinecap="round" />
+                        <path d="M14 18h8M18 14v8" stroke="var(--gray-300)" strokeWidth="1.5" strokeLinecap="round" />
+                      </svg>
+                      <span className="tl-empty-state-title">No tickets match your filters</span>
+                      <span className="tl-empty-state-sub">Try adjusting or clearing your search and filters.</span>
+                      <button className="tl-empty-state-btn" onClick={clearFilters}>Clear filters</button>
+                    </div>
+                  ) : (
+                    <div className="tl-empty-state">
+                      <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+                        <rect x="7" y="8" width="26" height="24" rx="3" stroke="var(--gray-300)" strokeWidth="1.5" />
+                        <path d="M14 15h12M14 20h8M14 25h5" stroke="var(--gray-300)" strokeWidth="1.5" strokeLinecap="round" />
+                      </svg>
+                      <span className="tl-empty-state-title">No tickets yet</span>
+                      <span className="tl-empty-state-sub">Create your first ticket to get started.</span>
+                      <button className="tl-empty-state-btn tl-empty-state-btn--primary" onClick={onNewTicket}>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                          <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                        </svg>
+                        New Ticket
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ) : (

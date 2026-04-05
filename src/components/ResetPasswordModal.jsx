@@ -14,6 +14,15 @@ export default function ResetPasswordModal({ user, onClose }) {
   // We render a fallback of 10 (the hard floor) so the form is usable immediately.
   const [minPasswordLength, setMinPasswordLength] = useState(null);
 
+  // Escape key closes the modal — consistent with all other modals in the app.
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   // Fetch the live policy on mount so the helper text is accurate.
   // This mirrors CreateUserForm's pattern exactly — the server enforces the same
   // setting, so we surface the same number in the UI.
@@ -52,16 +61,11 @@ export default function ResetPasswordModal({ user, onClose }) {
     }
   }
 
-  function handleBackdropClick(e) {
-    if (e.target === e.currentTarget) onClose();
-  }
-
   const minLen = minPasswordLength ?? 10;
 
   return (
     <div
       className="modal-backdrop"
-      onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"
       aria-label="Reset password"

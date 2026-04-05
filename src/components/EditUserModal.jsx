@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
@@ -25,6 +25,15 @@ export default function EditUserModal({ user, onClose, onUpdated }) {
   // self-lockout. Note: the server also enforces this, but disabling the field
   // here makes the constraint visible and avoids a confusing 400 response.
   const isSelf = currentUser?.id === user.id;
+
+  // Escape key closes the modal — consistent with all other modals in the app.
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   function set(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -56,14 +65,9 @@ export default function EditUserModal({ user, onClose, onUpdated }) {
     }
   }
 
-  function handleBackdropClick(e) {
-    if (e.target === e.currentTarget) onClose();
-  }
-
   return (
     <div
       className="modal-backdrop"
-      onClick={handleBackdropClick}
       role="dialog"
       aria-modal="true"
       aria-label="Edit user"

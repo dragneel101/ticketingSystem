@@ -1639,8 +1639,124 @@ body {
 }
 
 /* ============================================================
+   MOBILE HEADER NAV
+   ============================================================ */
+
+/* Hamburger button — hidden on desktop, visible on mobile */
+.app-header-hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  padding: 0;
+  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+  flex-shrink: 0;
+}
+
+.app-header-hamburger:hover {
+  border-color: var(--gray-300);
+  background: var(--gray-50);
+}
+
+.app-header-hamburger-bar {
+  display: block;
+  width: 16px;
+  height: 1.5px;
+  background: var(--gray-600);
+  border-radius: 2px;
+  transition: transform var(--t-base) var(--ease-out), opacity var(--t-fast) var(--ease);
+}
+
+/* Animate the hamburger into an X when open */
+.app-header-hamburger--open .app-header-hamburger-bar:nth-child(1) {
+  transform: translateY(5.5px) rotate(45deg);
+}
+.app-header-hamburger--open .app-header-hamburger-bar:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+.app-header-hamburger--open .app-header-hamburger-bar:nth-child(3) {
+  transform: translateY(-5.5px) rotate(-45deg);
+}
+
+/* Mobile nav drawer — drops below the header */
+.app-mobile-nav {
+  position: absolute;
+  top: var(--header-height);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border-bottom: 1px solid var(--gray-200);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0 0;
+  animation: slideDown 200ms var(--ease-out) both;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.app-mobile-nav-item {
+  width: 100%;
+  text-align: left;
+  padding: 12px 20px;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--gray-700);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  border-left: 3px solid transparent;
+}
+
+.app-mobile-nav-item:hover {
+  background: var(--gray-50);
+  color: var(--gray-900);
+}
+
+.app-mobile-nav-item--active {
+  color: var(--brand);
+  background: var(--brand-light);
+  border-left-color: var(--brand);
+  font-weight: 600;
+}
+
+.app-mobile-nav-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px 14px;
+  border-top: 1px solid var(--gray-100);
+  margin-top: 4px;
+}
+
+.app-mobile-nav-user {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--gray-500);
+}
+
+/* ============================================================
    RESPONSIVE
    ============================================================ */
+/* The header needs position: relative for the mobile nav absolute positioning */
+.app-header {
+  position: relative;
+}
+
 @media (max-width: 860px) {
   :root {
     --sidebar-width: 100%;
@@ -1659,6 +1775,22 @@ body {
 
   .main-content {
     height: 55vh;
+  }
+}
+
+/* Hide desktop nav / user area and show hamburger on narrow screens */
+@media (max-width: 680px) {
+  .app-header-nav,
+  .app-header-user {
+    display: none;
+  }
+
+  .app-header-hamburger {
+    display: flex;
+  }
+
+  .app-header-inner {
+    justify-content: space-between;
   }
 }
 
@@ -1779,6 +1911,80 @@ body {
 .btn-delete-ticket:hover {
   background: #fee2e2;
   border-color: #fca5a5;
+}
+
+/* ── Inline delete confirmation (TicketPage header) ─────── */
+.tp-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: fadeIn 150ms var(--ease-out) both;
+}
+
+.tp-delete-confirm-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--p-urgent-text);
+  white-space: nowrap;
+}
+
+/* ── TicketPage skeleton (while ticket loads) ────────────── */
+.tp-page--loading {
+  animation: none;
+}
+
+.tp-skeleton-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 28px;
+  background: #fff;
+  border-bottom: 1px solid var(--gray-200);
+  flex-shrink: 0;
+}
+
+.tp-skeleton-block {
+  display: block;
+  height: 13px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(
+    90deg,
+    var(--gray-100) 0%,
+    var(--gray-200) 40%,
+    var(--gray-100) 80%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.tp-skeleton-tab-bar {
+  display: flex;
+  gap: 12px;
+  padding: 16px 28px 0;
+  border-bottom: 1px solid var(--gray-100);
+  margin-bottom: 20px;
+}
+
+.tp-skeleton-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 28px;
+}
+
+.tp-skeleton-bubble {
+  display: block;
+  height: 48px;
+  border-radius: var(--r-lg);
+  background: linear-gradient(
+    90deg,
+    var(--gray-100) 0%,
+    var(--gray-200) 40%,
+    var(--gray-100) 80%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  max-width: 70%;
 }
 
 /* ── Admin header button ────────────────────────────────── */
@@ -3646,6 +3852,289 @@ body {
 }
 
 /* ============================================================
+   ALL ACTIVITY TAB — unified chronological feed
+   ============================================================
+
+  Layout:
+    .tp-activity-content   — flex column, fills tabpanel, overflow hidden
+      .af-feed             — flex:1, overflow-y:auto, the scrollable timeline
+        .af-message        — customer or support message card
+        .af-note           — internal note card (amber left border)
+        .af-event          — audit event row (centered dot + line, no card)
+      .af-readonly-hint    — pinned footer hint
+
+  Design decisions:
+    - Messages use full-width cards (not the narrow 78%-max-width bubble style)
+      because in the unified feed context left/right layout would fight with
+      the event rows. Cards keep the rhythm clean.
+    - Audit events are kept visually feather-light (no background, just a dot
+      between two horizontal rules) so they don't compete with message cards
+      for prominence. The eye naturally skips to messages.
+    - The amber left-border on notes (3px solid) is a stronger signal than
+      the background tint alone — it works even if a user has system-level
+      dark mode or contrast settings that mute tints.
+*/
+
+.tp-activity-content {
+  overflow: hidden;
+}
+
+/* Scrollable feed — takes all available vertical space */
+.af-feed {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gray-200) transparent;
+}
+
+.af-feed::-webkit-scrollbar { width: 4px; }
+.af-feed::-webkit-scrollbar-thumb {
+  background: var(--gray-200);
+  border-radius: 4px;
+}
+
+/* ── Message card (customer & support) ───────────────────── */
+.af-message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--gray-200);
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  animation: fadeUp 200ms var(--ease-out) both;
+}
+
+.af-message--support {
+  background: var(--brand-light, #eef0fe);
+  border-color: var(--brand-border, rgba(91,94,244,0.18));
+}
+
+.af-msg-sender {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+  color: var(--gray-500);
+}
+
+.af-msg-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.af-msg-dot--customer {
+  background: var(--gray-400);
+}
+
+.af-msg-dot--support {
+  background: var(--brand, #5b5ef4);
+}
+
+.af-message--support .af-msg-sender {
+  color: var(--brand, #5b5ef4);
+}
+
+.af-msg-bubble {
+  font-size: 13.5px;
+  line-height: 1.58;
+  color: var(--gray-800);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.af-msg-time {
+  font-size: 10px;
+  color: var(--gray-400);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.1px;
+  align-self: flex-end;
+}
+
+/* ── Internal note card ──────────────────────────────────── */
+.af-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px 12px 16px;
+  border-radius: var(--r-lg);
+  background: var(--note-bg, #fffbeb);
+  border: 1px solid #f0e8c0;
+  /* The amber left accent is the primary signal — stronger than tint alone */
+  border-left: 3px solid var(--p-high-text, #d97706);
+  box-shadow: var(--shadow-sm);
+  animation: fadeUp 200ms var(--ease-out) both;
+}
+
+.af-note-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.af-note-icon {
+  color: var(--p-high-text, #d97706);
+  flex-shrink: 0;
+}
+
+.af-note-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--p-high-text, #d97706);
+}
+
+/* Author email — muted, sits after the label */
+.af-note-author {
+  font-size: 10px;
+  color: var(--gray-400);
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.af-note-bubble {
+  font-size: 13.5px;
+  line-height: 1.58;
+  color: var(--gray-800);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Audit event row ─────────────────────────────────────── */
+/*
+  Visual rhythm: a thin horizontal line with the colored dot centered on it,
+  then the label + timestamp offset below. No card background — these are
+  system events, not human content, so they sit recessed between messages.
+*/
+.af-event {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  animation: fadeIn 180ms var(--ease) both;
+}
+
+/* The two line segments that bracket the dot horizontally */
+.af-event-line {
+  flex: 1;
+  height: 1px;
+  background: var(--gray-200);
+  display: block;
+  /* We lay the event row out as a centered flex row for the line+dot+line,
+     then the body goes below. Override flex-direction just for the top rail: */
+}
+
+/* Restructure event as a two-row block:
+   row 1: [line][dot][line]
+   row 2: [label + time, centered]
+*/
+.af-event {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.af-event-dot {
+  /* Override hist-dot defaults for feed context — slightly smaller */
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  margin-top: 0;
+}
+
+/* Build the [line][dot][line] rail as a flex row */
+.af-event::before {
+  content: '';
+  display: block;
+}
+
+/* Use a wrapper approach: the dot row is inline-flex centered */
+.af-event {
+  position: relative;
+}
+
+/* The horizontal rule drawn behind the dot */
+.af-event-line {
+  display: block;
+  height: 1px;
+  background: var(--gray-200);
+  /* These stretch full width; we use absolute centering for the dot */
+}
+
+/* Since we can't easily center the dot on a pseudo-element line in plain CSS
+   without extra markup, use a real layout: the .af-event uses CSS grid. */
+.af-event {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  row-gap: 4px;
+  align-items: center;
+}
+
+.af-event .af-event-line:first-child {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.af-event-dot.af-event-dot {
+  grid-column: 2;
+  grid-row: 1;
+  margin-top: 0;
+}
+
+.af-event .af-event-line:last-of-type {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.af-event-body {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Inherit hist-label but center-align for the event row */
+.af-event-label {
+  text-align: center;
+}
+
+/* ── Read-only hint footer ────────────────────────────────── */
+.af-readonly-hint {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 10px 20px 14px;
+  font-size: 11.5px;
+  color: var(--gray-400);
+  border-top: 1px solid var(--gray-100);
+  background: var(--gray-50);
+}
+
+.af-readonly-hint strong {
+  color: var(--gray-600);
+  font-weight: 600;
+}
+
+/* ============================================================
    TICKET LIST PAGE — Details Table View
    ============================================================ */
 
@@ -4170,13 +4659,101 @@ body {
   min-width: 0;
 }
 
+/* ── Skeleton rows ── */
+.tl-tr--skeleton {
+  pointer-events: none;
+}
+
+.tl-skeleton-cell {
+  display: block;
+  height: 12px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(
+    90deg,
+    var(--gray-100) 0%,
+    var(--gray-200) 40%,
+    var(--gray-100) 80%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
 /* Empty state row */
 .tl-td-empty {
-  padding: 48px 24px;
+  padding: 0;
   text-align: center;
-  color: var(--gray-400);
+  vertical-align: middle;
+}
+
+/* ── Enhanced empty state ── */
+.tl-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 64px 24px;
+  animation: fadeUp 300ms var(--ease-out) both;
+}
+
+.tl-empty-state svg {
+  opacity: 0.5;
+}
+
+.tl-empty-state-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--gray-600);
+  letter-spacing: -0.2px;
+}
+
+.tl-empty-state-sub {
   font-size: 13px;
-  font-style: italic;
+  color: var(--gray-400);
+  max-width: 280px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.tl-empty-state-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 18px;
+  background: var(--gray-100);
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-700);
+  cursor: pointer;
+  font-family: var(--sans);
+  transition:
+    border-color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+
+.tl-empty-state-btn:hover {
+  border-color: var(--gray-300);
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  color: var(--gray-900);
+}
+
+.tl-empty-state-btn--primary {
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-hover) 100%);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(91,94,244,0.3), inset 0 1px 0 rgba(255,255,255,0.12);
+}
+
+.tl-empty-state-btn--primary:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-hover) 100%);
+  box-shadow: 0 4px 16px rgba(91,94,244,0.35), inset 0 1px 0 rgba(255,255,255,0.12);
 }
 
 /* ── Load more (below the table) ── */
@@ -5036,6 +5613,460 @@ body {
 .email-settings-footer {
   display: flex;
   justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid var(--gray-100);
+}
+
+/* ── Email settings save button states ───────────────────────── */
+
+/* Success (saved) variant — overrides brand gradient with green. */
+.btn-primary--saved,
+.btn-primary--saved:hover {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.40), inset 0 1px 0 rgba(255,255,255,0.12);
+  filter: none;
+  transform: none;
+  transition:
+    background var(--t-base) var(--ease-out),
+    box-shadow var(--t-base) var(--ease-out);
+}
+
+/* Spinner — rotates the arc path around the circle center. */
+.esf-spinner {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 6px;
+  animation: esf-spin 700ms linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes esf-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Checkmark — pops in with a brief scale entrance. */
+.esf-check {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 6px;
+  flex-shrink: 0;
+  animation: esf-check-in 200ms var(--ease-out) both;
+}
+
+@keyframes esf-check-in {
+  from { transform: scale(0.5); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+/* ============================================================
+   SETTINGS PAGE — TWO-COLUMN LAYOUT + SIDEBAR NAV
+   ============================================================ */
+
+/* settings-admin-page: the outer .admin-page wrapper for the settings view.
+   The default .admin-page already has overflow-y: auto and flex-direction: column,
+   so this is just a namespace hook for specificity. */
+.settings-admin-page {
+  /* no overrides needed — inherits from .admin-page */
+}
+
+/* Outer wrapper: fills the admin-page flex column */
+.settings-layout {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  max-width: var(--page-max-width);
+  width: 100%;
+  margin: 0 auto;
+  padding: 2rem var(--page-padding);
+  box-sizing: border-box;
+}
+
+/* ── Sticky sidebar nav ───────────────────────────────────── */
+.settings-sidenav {
+  width: 220px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 2rem;
+  /* Align with the content column's top padding */
+  padding-right: 1.75rem;
+  box-sizing: border-box;
+}
+
+.settings-sidenav-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray-400);
+  margin: 0 0 0.6rem 0.5rem;
+}
+
+.settings-sidenav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-sidenav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border-radius: var(--r-md);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--gray-500);
+  text-align: left;
+  transition:
+    color var(--t-fast) var(--ease),
+    background var(--t-fast) var(--ease);
+}
+
+.settings-sidenav-item:hover {
+  color: var(--gray-800);
+  background: var(--gray-100);
+}
+
+.settings-sidenav-item--active {
+  color: var(--brand);
+  background: var(--brand-light);
+  font-weight: 600;
+}
+
+.settings-sidenav-item--active:hover {
+  background: var(--brand-light2);
+  color: var(--brand-hover);
+}
+
+.settings-sidenav-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.75;
+  transition: opacity var(--t-fast);
+}
+
+.settings-sidenav-item--active .settings-sidenav-icon {
+  opacity: 1;
+}
+
+/* ── Content column ───────────────────────────────────────── */
+.settings-content-col {
+  flex: 1;
+  min-width: 0;
+}
+
+/* When admin-page-body is used as the settings content column,
+   the layout wrapper already provides outer padding — override
+   the body's own padding/margin so it doesn't double-up. */
+.admin-page-body.settings-content-col {
+  padding: 0;
+  margin: 0;
+  max-width: none;
+  width: 100%;
+}
+
+/* ── Section cards ────────────────────────────────────────── */
+.settings-section {
+  /* Space between sections — scroll target anchor needs a little breathing room */
+  scroll-margin-top: 1.5rem;
+}
+
+/* ── Card header (icon + title + desc + divider) ──────────── */
+.sc-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  padding: 1.375rem 1.5rem 1.25rem;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.sc-header-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-md);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* Per-section icon accent colors */
+.sc-header-icon--security {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.sc-header-icon--sla {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.sc-header-icon--boards {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.sc-header-icon--email {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.sc-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.sc-header-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  margin: 0 0 0.3rem;
+}
+
+.sc-header-desc {
+  font-size: 0.8125rem;
+  color: var(--gray-500);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.sc-header-desc code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  padding: 0.1em 0.35em;
+  border-radius: var(--r-xs);
+}
+
+/* ── Card body ────────────────────────────────────────────── */
+.sc-body {
+  padding: 1.375rem 1.5rem 1.5rem;
+}
+
+/* For panels that manage their own padding (email form, SLA, boards) */
+.sc-body--flush {
+  padding: 0;
+}
+
+/* ── Patch: inline-form-host — hide remaining modal chrome ── */
+
+/* Hide the "Password Policy" modal title heading — replaced by sc-header */
+.inline-form-host .modal-title {
+  display: none;
+}
+
+/* Hide the Cancel button — there's nothing to cancel to in-page context */
+.inline-form-host .btn-secondary {
+  display: none;
+}
+
+/* Collapse the modal-footer top-margin when only Save remains */
+.inline-form-host .modal-footer {
+  justify-content: flex-start;
+  gap: 0;
+}
+
+/* Remove excess top padding from modal-header since title is hidden.
+   (Overrides the existing .inline-form-host .modal-header rule above) */
+.inline-form-host .modal-header {
+  padding: 0;
+  min-height: 0;
+  border-bottom: none;
+}
+
+/* The sc-body wrapper already provides padding — zero out modal-body padding
+   to avoid double-spacing the form fields */
+.inline-form-host .modal-body {
+  padding: 0;
+}
+
+/* ── SLA priority chips ───────────────────────────────────── */
+/* Wrap low/medium/high/urgent labels in the SLA table for color clarity */
+.sla-priority-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0.2rem 0.55rem;
+  border-radius: var(--r-full);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.sla-priority-chip--low {
+  background: var(--p-low-bg);
+  color: var(--p-low-text);
+}
+
+.sla-priority-chip--medium {
+  background: var(--p-medium-bg);
+  color: var(--p-medium-text);
+}
+
+.sla-priority-chip--high {
+  background: var(--p-high-bg);
+  color: var(--p-high-text);
+}
+
+.sla-priority-chip--urgent {
+  background: var(--p-urgent-bg);
+  color: var(--p-urgent-text);
+}
+
+.sla-priority-chip::before {
+  content: '';
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.75;
+}
+
+/* CSS-only priority column tinting in the SLA table.
+   Columns 2–5 are low/medium/high/urgent (after the Name column).
+   We can't add classes without touching SlaAdminPanel, so we use
+   positional nth-child to apply a subtle background accent to the
+   column header cells. This gives each priority column a distinct color
+   without touching the component JSX. */
+.sla-table thead tr th:nth-child(2) { color: var(--p-low-text);    background: var(--p-low-bg);    border-radius: var(--r-xs) var(--r-xs) 0 0; }
+.sla-table thead tr th:nth-child(3) { color: var(--p-medium-text); background: var(--p-medium-bg); border-radius: var(--r-xs) var(--r-xs) 0 0; }
+.sla-table thead tr th:nth-child(4) { color: var(--p-high-text);   background: var(--p-high-bg);   border-radius: var(--r-xs) var(--r-xs) 0 0; }
+.sla-table thead tr th:nth-child(5) { color: var(--p-urgent-text); background: var(--p-urgent-bg); border-radius: var(--r-xs) var(--r-xs) 0 0; }
+
+/* Priority label cells in the SLA times form table (create/edit) */
+/* Column 1 = priority name: low/medium/high/urgent */
+.sla-times-table tbody tr:nth-child(1) td:first-child { color: var(--p-low-text);    font-weight: 600; }
+.sla-times-table tbody tr:nth-child(2) td:first-child { color: var(--p-medium-text); font-weight: 600; }
+.sla-times-table tbody tr:nth-child(3) td:first-child { color: var(--p-high-text);   font-weight: 600; }
+.sla-times-table tbody tr:nth-child(4) td:first-child { color: var(--p-urgent-text); font-weight: 600; }
+
+/* ── Email settings skeleton ──────────────────────────────── */
+.esf-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.25rem;
+  animation: fadeIn 200ms var(--ease-out) both;
+}
+
+.esf-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem 1.5rem;
+}
+
+.esf-skeleton-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Shimmer base — matches the established .tp-skeleton-block pattern */
+.esf-skeleton-label,
+.esf-skeleton-input,
+.esf-skeleton-btn {
+  display: block;
+  border-radius: var(--r-sm);
+  background: linear-gradient(
+    90deg,
+    var(--gray-100) 0%,
+    var(--gray-200) 40%,
+    var(--gray-100) 80%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.esf-skeleton-label {
+  height: 11px;
+  width: 40%;
+}
+
+.esf-skeleton-input {
+  height: 38px;
+  width: 100%;
+  border-radius: var(--r-sm);
+}
+
+.esf-skeleton-footer {
+  display: flex;
+  justify-content: flex-end;
   padding-top: 0.25rem;
   border-top: 1px solid var(--gray-100);
+}
+
+.esf-skeleton-btn {
+  height: 36px;
+  width: 160px;
+  border-radius: var(--r-sm);
+}
+
+/* ── Responsive: mobile sidebar collapses to tab strip ─────── */
+@media (max-width: 768px) {
+  .settings-layout {
+    flex-direction: column;
+    padding: 1rem var(--page-padding);
+    gap: 0;
+  }
+
+  .settings-sidenav {
+    width: 100%;
+    position: static;
+    padding-right: 0;
+    padding-bottom: 1rem;
+  }
+
+  .settings-sidenav-label {
+    display: none;
+  }
+
+  .settings-sidenav-list {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 4px;
+    padding-bottom: 2px;
+    /* Hide scrollbar on mobile but keep scroll functionality */
+    scrollbar-width: none;
+  }
+
+  .settings-sidenav-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-sidenav-item {
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .settings-content-col {
+    width: 100%;
+  }
+
+  .sc-header {
+    padding: 1.125rem 1.125rem 1rem;
+  }
+
+  .sc-body {
+    padding: 1.125rem;
+  }
 }

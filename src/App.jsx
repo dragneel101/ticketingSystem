@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TicketProvider } from './context/TicketContext';
 import { ToastProvider, useToast } from './context/ToastContext';
@@ -93,6 +93,35 @@ function AppShell() {
   }, []);
 
   const isAdmin = user?.role === 'admin';
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mobileNavRef = useRef(null);
+
+  // Close the mobile nav when clicking outside of it.
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    function handleClick(e) {
+      if (mobileNavRef.current && !mobileNavRef.current.contains(e.target)) {
+        setMobileNavOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [mobileNavOpen]);
+
+  // Close mobile nav on Escape.
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    function handleKey(e) {
+      if (e.key === 'Escape') setMobileNavOpen(false);
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [mobileNavOpen]);
+
+  function handleMobileNavClick(view) {
+    handleNavClick(view);
+    setMobileNavOpen(false);
+  }
 
   return (
     <>
@@ -100,7 +129,7 @@ function AppShell() {
         <div className="app-header-inner">
           <span className="app-header-brand">Support Portal</span>
 
-          {/* Main nav — Dashboard and Tickets are visible to all roles.
+          {/* Desktop nav — Dashboard and Tickets are visible to all roles.
               Users and Settings are admin-only, guarded here and at render time. */}
           <nav className="app-header-nav" aria-label="Main navigation">
             <button
@@ -149,7 +178,57 @@ function AppShell() {
             <span className="app-header-name">{user?.name}</span>
             <button className="app-header-logout" onClick={handleLogout}>Sign out</button>
           </div>
+
+          {/* Mobile hamburger — only visible below the responsive breakpoint */}
+          <button
+            className={`app-header-hamburger${mobileNavOpen ? ' app-header-hamburger--open' : ''}`}
+            onClick={() => setMobileNavOpen((v) => !v)}
+            aria-label={mobileNavOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={mobileNavOpen}
+          >
+            <span className="app-header-hamburger-bar" />
+            <span className="app-header-hamburger-bar" />
+            <span className="app-header-hamburger-bar" />
+          </button>
         </div>
+
+        {/* Mobile nav drawer — slides down from header */}
+        {mobileNavOpen && (
+          <div className="app-mobile-nav" ref={mobileNavRef} role="navigation" aria-label="Mobile navigation">
+            <button
+              className={`app-mobile-nav-item${activeView === VIEWS.DASHBOARD ? ' app-mobile-nav-item--active' : ''}`}
+              onClick={() => handleMobileNavClick(VIEWS.DASHBOARD)}
+            >Dashboard</button>
+            <button
+              className={`app-mobile-nav-item${activeView === VIEWS.TICKETS ? ' app-mobile-nav-item--active' : ''}`}
+              onClick={() => handleMobileNavClick(VIEWS.TICKETS)}
+            >Tickets</button>
+            <button
+              className={`app-mobile-nav-item${activeView === VIEWS.CUSTOMERS ? ' app-mobile-nav-item--active' : ''}`}
+              onClick={() => handleMobileNavClick(VIEWS.CUSTOMERS)}
+            >Customers</button>
+            <button
+              className={`app-mobile-nav-item${(activeView === VIEWS.COMPANIES || activeView === VIEWS.COMPANY_DETAIL) ? ' app-mobile-nav-item--active' : ''}`}
+              onClick={() => handleMobileNavClick(VIEWS.COMPANIES)}
+            >Companies</button>
+            {isAdmin && (
+              <button
+                className={`app-mobile-nav-item${activeView === VIEWS.USERS ? ' app-mobile-nav-item--active' : ''}`}
+                onClick={() => handleMobileNavClick(VIEWS.USERS)}
+              >Users</button>
+            )}
+            {isAdmin && (
+              <button
+                className={`app-mobile-nav-item${activeView === VIEWS.SETTINGS ? ' app-mobile-nav-item--active' : ''}`}
+                onClick={() => handleMobileNavClick(VIEWS.SETTINGS)}
+              >Settings</button>
+            )}
+            <div className="app-mobile-nav-footer">
+              <span className="app-mobile-nav-user">{user?.name}</span>
+              <button className="app-header-logout" onClick={handleLogout}>Sign out</button>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* View switcher — no router needed at this scale */}

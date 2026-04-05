@@ -29,17 +29,64 @@ const VIEWS = {
   SETTINGS: 'settings',
 };
 
+// Persist navigation state in sessionStorage so a page refresh restores the
+// same view. Clears automatically when the tab is closed.
+const VALID_VIEWS = new Set(Object.values(VIEWS));
+
+function readSession() {
+  try {
+    const view = sessionStorage.getItem('nav_view');
+    const id   = sessionStorage.getItem('nav_selectedId');
+    const co   = sessionStorage.getItem('nav_selectedCompany');
+    return {
+      view:    VALID_VIEWS.has(view) ? view : VIEWS.DASHBOARD,
+      id:      id || null,
+      company: co ? JSON.parse(co) : null,
+    };
+  } catch {
+    return { view: VIEWS.DASHBOARD, id: null, company: null };
+  }
+}
+
 /* ── inner shell — must be inside TicketProvider ─────────── */
 function AppShell() {
   const { user, logout } = useAuth();
   const { addToast } = useToast();
-  const [activeView, setActiveView] = useState(VIEWS.DASHBOARD);
-  const [selectedId, setSelectedId] = useState(null);
+
+  const session = readSession();
+  // ticket_detail requires a selectedId; company_detail requires a company object.
+  // Fall back gracefully when the required data is missing.
+  const initialView =
+    (session.view === VIEWS.TICKET_DETAIL && !session.id) ||
+    (session.view === VIEWS.COMPANY_DETAIL && !session.company)
+      ? VIEWS.DASHBOARD
+      : session.view;
+
+  const [activeView, setActiveView] = useState(initialView);
+  const [selectedId, setSelectedId] = useState(session.id);
   const [showNewTicket, setShowNewTicket] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
-  const [selectedCompany, setSelectedCompany] = useState(null);
+  const [selectedCompany, setSelectedCompany] = useState(session.company);
+
+  // Keep sessionStorage in sync whenever navigation state changes.
+  useEffect(() => {
+    sessionStorage.setItem('nav_view', activeView);
+  }, [activeView]);
+
+  useEffect(() => {
+    if (selectedId) sessionStorage.setItem('nav_selectedId', selectedId);
+    else            sessionStorage.removeItem('nav_selectedId');
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (selectedCompany) sessionStorage.setItem('nav_selectedCompany', JSON.stringify(selectedCompany));
+    else                 sessionStorage.removeItem('nav_selectedCompany');
+  }, [selectedCompany]);
 
   async function handleLogout() {
+    sessionStorage.removeItem('nav_view');
+    sessionStorage.removeItem('nav_selectedId');
+    sessionStorage.removeItem('nav_selectedCompany');
     await logout();
     addToast('Logged out', 'info');
   }

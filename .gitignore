@@ -25,5 +25,5 @@ dist-ssr
 *.sw?
 schema.sql
 SKILL.md
-.claude
+.claude/*
 CLAUDE.md

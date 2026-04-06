@@ -323,3 +323,55 @@ CREATE INDEX IF NOT EXISTS idx_tickets_sla_notified
 -- Default 5 minutes. Admin-configurable via the Settings UI.
 INSERT INTO settings (key, value) VALUES ('sla_check_interval_minutes', '5')
   ON CONFLICT (key) DO NOTHING;
+
+-- ── Migration: ticket attachments (SeaweedFS) ─────────────────
+-- Files are stored in SeaweedFS (S3-compatible). Only the S3 object key is
+-- stored here — the actual bytes live in SeaweedFS. Deleting a ticket
+-- cascades and removes attachment rows, but callers must also call
+-- DELETE on SeaweedFS (handled in routes/attachments.js).
+CREATE TABLE IF NOT EXISTS ticket_attachments (
+  id           SERIAL PRIMARY KEY,
+  ticket_id    INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  uploader_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  filename     VARCHAR(255) NOT NULL,   -- original filename shown in UI
+  storage_key  TEXT NOT NULL,           -- S3 object key in SeaweedFS bucket
+  mime_type    VARCHAR(100),
+  size_bytes   INTEGER,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_attachments_ticket_id
+  ON ticket_attachments(ticket_id);
+
+-- ── Migration: public download token on attachments ─────────────────
+-- A random UUID per attachment that lets anyone with the link download the
+-- file without being authenticated. Used in customer-facing email notifications.
+-- UNIQUE so it can be used as a lookup key. NOT NULL with DEFAULT means every
+-- new row gets a token automatically; existing rows need a one-time backfill
+-- (see the UPDATE below).
+ALTER TABLE ticket_attachments
+  ADD COLUMN IF NOT EXISTS public_token TEXT;
+
+-- Backfill tokens for existing rows that don't have one yet.
+UPDATE ticket_attachments SET public_token = gen_random_uuid()::text WHERE public_token IS NULL;
+
+-- Enforce UNIQUE after the backfill so we don't violate it on existing data.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'ticket_attachments_public_token_key'
+  ) THEN
+    ALTER TABLE ticket_attachments ADD CONSTRAINT ticket_attachments_public_token_key UNIQUE (public_token);
+  END IF;
+END $$;
+
+-- ── Migration: link attachments to the message they were sent with ────
+-- message_id is nullable: attachments uploaded directly via the Attachments
+-- tab have no associated message. ON DELETE SET NULL so deleting a message
+-- doesn't cascade-delete the file — it just becomes a standalone attachment.
+ALTER TABLE ticket_attachments
+  ADD COLUMN IF NOT EXISTS message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_ticket_attachments_message_id
+  ON ticket_attachments(message_id);

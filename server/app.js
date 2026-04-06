@@ -56,6 +56,12 @@ app.get('/api/healthz', async (req, res) => {
   }
 });
 
+// ── Public routes (no auth — token-based access) ─────────────
+// Must be mounted before requireAuth so unauthenticated clients
+// (e.g. customers clicking email links) can download attachments.
+const publicRouter = require('./routes/public');
+app.use('/api/public', publicRouter);
+
 // ── Auth routes (public — no requireAuth) ────────────────────
 const authRouter = require('./routes/auth');
 app.use('/api/auth', authRouter);
@@ -94,6 +100,11 @@ app.use('/api/sla-policies', requireAuth, slaRouter);
 // ── Board routes (protected; admin-only mutations) ────────────
 const boardsRouter = require('./routes/boards');
 app.use('/api/boards', requireAuth, boardsRouter);
+
+// ── Attachment routes (protected; nested under tickets) ───────
+// mergeParams: true in the router picks up :ticketId from this mount path.
+const attachmentsRouter = require('./routes/attachments');
+app.use('/api/tickets/:ticketId/attachments', requireAuth, attachmentsRouter);
 
 // ── SPA catch-all — must be last ─────────────────────────────
 // Any non-API request gets index.html so client-side routing works.

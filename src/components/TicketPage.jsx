@@ -131,13 +131,52 @@ function AssigneeSelect({ id, agents, assignedTo, onChange, disabled }) {
 
 // A single customer-facing or support reply bubble.
 // customerEmail is the ticket's customer so we can tell which side each message is on.
-function MessageBubble({ message, customerEmail }) {
+function MessageBubble({ message, customerEmail, ticketId }) {
   const isSupport = message.from !== customerEmail;
   const side = isSupport ? 'support' : 'customer';
+  const atts = message.attachments ?? [];
   return (
     <div className={`message-group ${side}`}>
       <span className="message-sender">{message.from}</span>
-      <div className="message-bubble" role="article">{message.text}</div>
+      <div className="message-bubble" role="article">
+        {message.text && <span>{message.text}</span>}
+        {atts.length > 0 && (
+          <div className={`msg-attachments${message.text ? ' msg-attachments--below-text' : ''}`}>
+            {atts.map((a) => {
+              const isImage = a.mimeType?.startsWith('image/');
+              const href = `/api/tickets/${ticketId}/attachments/${a.id}/download`;
+              return isImage ? (
+                <a
+                  key={a.id}
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="msg-att-image-link"
+                  title={a.filename}
+                >
+                  <img
+                    src={href}
+                    alt={a.filename}
+                    className="msg-att-image"
+                    loading="lazy"
+                  />
+                </a>
+              ) : (
+                <a
+                  key={a.id}
+                  href={href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="msg-att-file"
+                >
+                  <span className="msg-att-file-icon" aria-hidden="true">📎</span>
+                  <span className="msg-att-file-name">{a.filename}</span>
+                </a>
+              );
+            })}
+          </div>
+        )}
+      </div>
       <time className="message-time" dateTime={message.time}>{formatTime(message.time)}</time>
     </div>
   );
@@ -155,7 +194,7 @@ function NoteBubble({ message }) {
 }
 
 // ── Communication tab ──────────────────────────────────────────
-function CommunicationTab({ ticket, ticketId }) {
+function CommunicationTab({ ticket, ticketId, onAttachmentsUploaded }) {
   const { addMessage } = useTickets();
   const { addToast } = useToast();
   const { user } = useAuth();
@@ -164,8 +203,10 @@ function CommunicationTab({ ticket, ticketId }) {
   const [isSending, setIsSending] = useState(false);
   const [justSent, setJustSent] = useState(false);
   const [notifyCustomer, setNotifyCustomer] = useState(true);
+  const [pendingFiles, setPendingFiles] = useState([]);
   const threadRef = useRef(null);
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Filter to only customer/support messages — excludes internal notes.
   const messages = (ticket.messages || []).filter((m) => m.type !== 'note');
@@ -177,23 +218,77 @@ function CommunicationTab({ ticket, ticketId }) {
     }
   }, [messages.length]);
 
+  // Clean up object URLs on unmount to avoid memory leaks.
+  useEffect(() => {
+    return () => {
+      pendingFiles.forEach((pf) => { if (pf.preview) URL.revokeObjectURL(pf.preview); });
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleFileSelect(e) {
+    const files = Array.from(e.target.files);
+    const next = files.map((file) => ({
+      file,
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+    }));
+    setPendingFiles((prev) => [...prev, ...next]);
+    e.target.value = '';
+  }
+
+  function handleRemoveFile(id) {
+    setPendingFiles((prev) => {
+      const item = prev.find((f) => f.id === id);
+      if (item?.preview) URL.revokeObjectURL(item.preview);
+      return prev.filter((f) => f.id !== id);
+    });
+  }
+
   const handleSend = useCallback(async () => {
     const text = replyText.trim();
-    if (!text || isSending) return;
+    if ((!text && pendingFiles.length === 0) || isSending) return;
     setIsSending(true);
+    const filesToUpload = [...pendingFiles];
     try {
-      await addMessage(ticketId, { from: agentEmail, text, type: 'message', notify_customer: notifyCustomer });
+      // 1. Upload attachments and collect their IDs
+      let uploadedIds = [];
+      if (filesToUpload.length > 0) {
+        for (const pf of filesToUpload) {
+          if (pf.file.size > 20 * 1024 * 1024) throw new Error(`${pf.file.name} exceeds 20 MB limit`);
+          const fd = new FormData();
+          fd.append('file', pf.file);
+          const res = await fetch(`/api/tickets/${ticketId}/attachments`, { method: 'POST', body: fd });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || `Failed to upload ${pf.file.name}`);
+          }
+          const att = await res.json();
+          uploadedIds.push(att.id);
+        }
+        filesToUpload.forEach((pf) => { if (pf.preview) URL.revokeObjectURL(pf.preview); });
+        setPendingFiles([]);
+        onAttachmentsUploaded?.();
+      }
+      // 2. Send message (text, attachments, or both)
+      await addMessage(ticketId, {
+        from: agentEmail,
+        text: text || '',
+        type: 'message',
+        notify_customer: notifyCustomer,
+        attachment_ids: uploadedIds,
+      });
       setReplyText('');
       setJustSent(true);
       addToast('Reply sent', 'success');
       setTimeout(() => setJustSent(false), 2000);
       requestAnimationFrame(() => textareaRef.current?.focus());
-    } catch {
-      addToast('Failed to send reply', 'error');
+    } catch (err) {
+      addToast(err.message || 'Failed to send', 'error');
     } finally {
       setIsSending(false);
     }
-  }, [replyText, isSending, ticketId, addMessage, addToast]);
+  }, [replyText, pendingFiles, isSending, ticketId, addMessage, addToast, agentEmail, notifyCustomer, onAttachmentsUploaded]);
 
   function handleKeyDown(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -202,7 +297,26 @@ function CommunicationTab({ ticket, ticketId }) {
     }
   }
 
-  const canSend = replyText.trim().length > 0 && !isSending;
+  function handlePaste(e) {
+    const items = Array.from(e.clipboardData?.items ?? []);
+    const imageItems = items.filter((item) => item.type.startsWith('image/'));
+    if (imageItems.length === 0) return;
+    e.preventDefault(); // don't paste raw image data as text
+    const next = imageItems.map((item) => {
+      const file = item.getAsFile();
+      // clipboard images have no filename — generate one from timestamp
+      const ext = file.type.split('/')[1] || 'png';
+      const named = new File([file], `pasted-image-${Date.now()}.${ext}`, { type: file.type });
+      return {
+        file: named,
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        preview: URL.createObjectURL(named),
+      };
+    });
+    setPendingFiles((prev) => [...prev, ...next]);
+  }
+
+  const canSend = (replyText.trim().length > 0 || pendingFiles.length > 0) && !isSending;
 
   return (
     <div className="tp-tab-content">
@@ -226,7 +340,7 @@ function CommunicationTab({ ticket, ticketId }) {
           </div>
         ) : (
           messages.map((msg, i) => (
-            <MessageBubble key={`${msg.time}-${i}`} message={msg} customerEmail={ticket.customerEmail} />
+            <MessageBubble key={`${msg.time}-${i}`} message={msg} customerEmail={ticket.customerEmail} ticketId={ticketId} />
           ))
         )}
       </div>
@@ -240,10 +354,39 @@ function CommunicationTab({ ticket, ticketId }) {
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             rows={3}
             aria-label="Reply message"
             disabled={isSending}
           />
+
+          {/* Pending file / image chips */}
+          {pendingFiles.length > 0 && (
+            <div className="reply-attach-area" role="list" aria-label="Files to attach">
+              {pendingFiles.map((pf) => (
+                <div
+                  key={pf.id}
+                  className={`reply-attach-chip${pf.preview ? ' reply-attach-chip--image' : ''}`}
+                  role="listitem"
+                >
+                  {pf.preview ? (
+                    <img src={pf.preview} alt="" className="reply-attach-thumb" aria-hidden="true" />
+                  ) : (
+                    <span className="reply-attach-icon" aria-hidden="true">📎</span>
+                  )}
+                  <span className="reply-attach-name" title={pf.file.name}>{pf.file.name}</span>
+                  <button
+                    type="button"
+                    className="reply-attach-remove"
+                    onClick={() => handleRemoveFile(pf.id)}
+                    aria-label={`Remove ${pf.file.name}`}
+                    disabled={isSending}
+                  >✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="reply-notify-row">
             <label className="reply-notify-toggle" title={notifyCustomer ? 'Customer will be notified by email' : 'Customer will NOT be notified'}>
               <input
@@ -259,6 +402,32 @@ function CommunicationTab({ ticket, ticketId }) {
             </label>
           </div>
           <div className="reply-footer">
+            {/* Hidden file input — triggered by the paperclip button */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              style={{ display: 'none' }}
+              onChange={handleFileSelect}
+              aria-label="Attach files"
+            />
+            <button
+              type="button"
+              className="reply-attach-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isSending}
+              aria-label="Attach files or images"
+              title="Attach files or images"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M13.5 7.5L7.5 13.5C5.84 15.16 3.16 15.16 1.5 13.5C-0.16 11.84 -0.16 9.16 1.5 7.5L7.5 1.5C8.66 0.34 10.56 0.34 11.72 1.5C12.88 2.66 12.88 4.56 11.72 5.72L6.22 11.22C5.64 11.8 4.7 11.8 4.12 11.22C3.54 10.64 3.54 9.7 4.12 9.12L9.12 4.12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {pendingFiles.length > 0 && (
+                <span className="reply-attach-count" aria-label={`${pendingFiles.length} files pending`}>
+                  {pendingFiles.length}
+                </span>
+              )}
+            </button>
             <span className="reply-sender-label">
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                 <circle cx="6" cy="4" r="2.5" stroke="currentColor" strokeWidth="1.2" />
@@ -560,6 +729,16 @@ const EVENT_CONFIG = {
       </>
     ),
   },
+  attachment_added: {
+    dotClass: 'hist-dot--attachment',
+    label: (e) => (
+      <>
+        <span className="hist-actor">{e.actorName ?? 'Someone'}</span>
+        {' attached '}
+        <strong>{e.toValue}</strong>
+      </>
+    ),
+  },
 };
 
 // Fallback for unknown event types — future-proofs against new event_type values
@@ -608,7 +787,7 @@ const AF_FILTERS = [
 // ── All Activity tab ──────────────────────────────────────────
 // Merges messages, notes, and audit events into a single chronological timeline.
 // Read-only — agents compose in the Communication and Notes tabs.
-function AllActivityTab({ ticket }) {
+function AllActivityTab({ ticket, ticketId }) {
   const feedRef = useRef(null);
   const [activeFilter, setActiveFilter] = useState('all');
   const [showJumpBtn, setShowJumpBtn] = useState(false);
@@ -725,7 +904,27 @@ function AllActivityTab({ ticket }) {
               </>
             )}
           </span>
-          <div className="af-msg-bubble">{item.text}</div>
+          <div className="af-msg-bubble">
+            {item.text && <span>{item.text}</span>}
+            {(item.attachments ?? []).length > 0 && (
+              <div className={`msg-attachments${item.text ? ' msg-attachments--below-text' : ''}`}>
+                {(item.attachments).map((a) => {
+                  const isImage = a.mimeType?.startsWith('image/');
+                  const href = `/api/tickets/${ticketId}/attachments/${a.id}/download`;
+                  return isImage ? (
+                    <a key={a.id} href={href} target="_blank" rel="noreferrer" className="msg-att-image-link" title={a.filename}>
+                      <img src={href} alt={a.filename} className="msg-att-image" loading="lazy" />
+                    </a>
+                  ) : (
+                    <a key={a.id} href={href} target="_blank" rel="noreferrer" className="msg-att-file">
+                      <span className="msg-att-file-icon" aria-hidden="true">📎</span>
+                      <span className="msg-att-file-name">{a.filename}</span>
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           <time className="af-msg-time" dateTime={item.time}>{formatTime(item.time)}</time>
         </div>
       );
@@ -845,6 +1044,150 @@ function AllActivityTab({ ticket }) {
   );
 }
 
+// ── AttachmentsTab ─────────────────────────────────────────────
+function AttachmentsTab({ ticketId, refreshKey }) {
+  const { addToast } = useToast();
+  const [attachments, setAttachments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}/attachments`);
+      if (!res.ok) throw new Error('Failed to load attachments');
+      setAttachments(await res.json());
+    } catch {
+      addToast('Failed to load attachments', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [ticketId, addToast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Reload when files are uploaded from another tab (e.g. Communication tab).
+  useEffect(() => {
+    if (refreshKey) load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
+
+  async function handleUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      addToast('File exceeds 20 MB limit', 'error');
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`/api/tickets/${ticketId}/attachments`, { method: 'POST', body: fd });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Upload failed');
+      }
+      addToast('File uploaded', 'success');
+      await load();
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
+
+  async function handleDelete(att) {
+    if (!window.confirm(`Delete "${att.filename}"?`)) return;
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}/attachments/${att.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+      addToast('Attachment deleted', 'success');
+      setAttachments((prev) => prev.filter((a) => a.id !== att.id));
+    } catch {
+      addToast('Failed to delete attachment', 'error');
+    }
+  }
+
+  function formatBytes(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function fileIcon(mime) {
+    if (!mime) return '📎';
+    if (mime.startsWith('image/')) return '🖼️';
+    if (mime === 'application/pdf') return '📄';
+    if (mime.includes('zip')) return '🗜️';
+    if (mime.startsWith('text/')) return '📝';
+    if (mime.includes('word') || mime.includes('document')) return '📃';
+    if (mime.includes('sheet') || mime.includes('excel')) return '📊';
+    return '📎';
+  }
+
+  return (
+    <div className="att-tab">
+      <div className="att-toolbar">
+        <input
+          ref={fileInputRef}
+          type="file"
+          style={{ display: 'none' }}
+          onChange={handleUpload}
+          aria-label="Upload file"
+        />
+        <button
+          className="att-upload-btn"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+        >
+          {uploading ? 'Uploading…' : '+ Upload file'}
+        </button>
+        <span className="att-hint">Max 20 MB · PDF, images, Office docs, ZIP, TXT</span>
+      </div>
+
+      {loading ? (
+        <div className="att-empty">Loading…</div>
+      ) : attachments.length === 0 ? (
+        <div className="att-empty">No attachments yet</div>
+      ) : (
+        <ul className="att-list">
+          {attachments.map((att) => (
+            <li key={att.id} className="att-item">
+              <span className="att-icon" aria-hidden="true">{fileIcon(att.mime_type)}</span>
+              <div className="att-meta">
+                <a
+                  className="att-name"
+                  href={`/api/tickets/${ticketId}/attachments/${att.id}/download`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {att.filename}
+                </a>
+                <span className="att-detail">
+                  {formatBytes(att.size_bytes)}
+                  {att.uploader_name && ` · ${att.uploader_name}`}
+                  {att.created_at && ` · ${formatTime(att.created_at)}`}
+                </span>
+              </div>
+              <button
+                className="att-delete-btn"
+                onClick={() => handleDelete(att)}
+                aria-label={`Delete ${att.filename}`}
+                title="Delete"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ── Main TicketPage component ──────────────────────────────────
 // This replaces the old TicketDetail — it takes over the full main content
 // area. onBack() resets the view to the ticket list.
@@ -871,6 +1214,7 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
   const [activeTab, setActiveTab] = useState('communication');
   const [agents, setAgents] = useState([]);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [attachRefreshKey, setAttachRefreshKey] = useState(0);
   // Buffered edits — null means no unsaved changes. Fields are merged in as
   // the user touches each select; Save commits them all in one PATCH.
   const [draft, setDraft] = useState(null);
@@ -990,6 +1334,7 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
     { id: 'notes', label: 'Internal Notes' },
     { id: 'resolution', label: 'Resolution' },
     { id: 'activity', label: 'All Activity' },
+    { id: 'attachments', label: 'Attachments' },
   ];
 
   return (
@@ -1253,7 +1598,11 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
             className="tp-tabpanel"
           >
             {activeTab === 'communication' && (
-              <CommunicationTab ticket={ticket} ticketId={ticketId} />
+              <CommunicationTab
+                ticket={ticket}
+                ticketId={ticketId}
+                onAttachmentsUploaded={() => setAttachRefreshKey((k) => k + 1)}
+              />
             )}
             {activeTab === 'notes' && (
               <InternalNotesTab ticket={ticket} ticketId={ticketId} />
@@ -1262,7 +1611,10 @@ export default function TicketPage({ ticketId, onBack, onViewCustomer }) {
               <ResolutionTab ticket={ticket} ticketId={ticketId} onUpdate={updateAndRefresh} />
             )}
             {activeTab === 'activity' && (
-              <AllActivityTab ticket={ticket} />
+              <AllActivityTab ticket={ticket} ticketId={ticketId} />
+            )}
+            {activeTab === 'attachments' && (
+              <AttachmentsTab ticketId={ticketId} refreshKey={attachRefreshKey} />
             )}
           </div>
         </div>

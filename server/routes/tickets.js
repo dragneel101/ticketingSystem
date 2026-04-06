@@ -3,13 +3,16 @@ const router = express.Router();
 const pool = require('../db');
 const { computeSlaDeadlines } = require('../lib/slaUtils');
 const { sendEmail, isEmailConfigured, getSupportEmail } = require('../lib/emailService');
+const { getFileBuffer } = require('../lib/seaweedStorage');
 
 // ── helpers ───────────────────────────────────────────────────
 
 // Shape a DB row into the format the frontend expects.
 // The row may include assignee columns from a LEFT JOIN on users —
 // we always emit the assignment fields so the frontend can rely on them.
-function formatTicket(row, messages = [], events = []) {
+// attachmentsByMsgId: { [messageId]: [{id, filename, mimeType, sizeBytes}] }
+// Optional — defaults to {} so callers that don't fetch attachments still work.
+function formatTicket(row, messages = [], events = [], attachmentsByMsgId = {}) {
   return {
     id: row.ticket_ref,
     subject: row.subject,
@@ -29,11 +32,14 @@ function formatTicket(row, messages = [], events = []) {
     assigneeEmail: row.assignee_email ?? null,
     // Each message includes its type ('message' | 'note') so the frontend
     // can filter to the correct tab without a second request.
+    // attachments[] contains files uploaded alongside this message.
     messages: messages.map((m) => ({
+      id: m.id,
       from: m.from_addr,
       text: m.body,
       time: m.created_at,
       type: m.type ?? 'message',
+      attachments: attachmentsByMsgId[m.id] ?? [],
     })),
     // Audit trail — chronological list of state transitions.
     // Empty array on list endpoint (events aren't fetched there),
@@ -192,12 +198,32 @@ function buildStatusChangedHtml({ ticketRef, subject, customerName, oldStatus, n
 
 // ── Email template: new reply ─────────────────────────────────
 // Sent to the customer when a non-internal message is posted on their ticket.
-function buildNewReplyHtml({ ticketRef, subject, customerName, replyText }) {
+// inlineImages: [{ filename, cid }] — images embedded via cid: references.
+// fileAttachments: [{ filename }] — non-image files listed by name (attached separately).
+function buildNewReplyHtml({ ticketRef, subject, customerName, replyText, inlineImages = [], fileAttachments = [] }) {
   const escHtml = (str) => String(str || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+
+  const imagesHtml = inlineImages.length > 0
+    ? inlineImages.map((img) => `
+        <div style="margin-top: 10px;">
+          <img src="cid:${escHtml(img.cid)}" alt="${escHtml(img.filename)}"
+            style="max-width: 100%; max-height: 300px; border-radius: 4px; border: 1px solid #e2e8f0; display: block;" />
+          <p style="margin: 4px 0 0; font-size: 11px; color: #718096;">${escHtml(img.filename)}</p>
+        </div>`).join('')
+    : '';
+
+  const filesHtml = fileAttachments.length > 0
+    ? `<div style="margin-top: 16px; padding: 12px 16px; background: #f7fafc; border-radius: 4px; border: 1px solid #e2e8f0;">
+        <p style="margin: 0 0 8px; font-size: 13px; font-weight: 600; color: #4a5568;">📎 Attachments (${fileAttachments.length}):</p>
+        <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: #2d3748;">
+          ${fileAttachments.map((f) => `<li style="margin-bottom: 4px;">${escHtml(f.filename)}</li>`).join('')}
+        </ul>
+      </div>`
+    : '';
 
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a2e;">
@@ -216,7 +242,9 @@ function buildNewReplyHtml({ ticketRef, subject, customerName, replyText }) {
             <td style="padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">${escHtml(subject)}</td>
           </tr>
         </table>
-        <div style="margin-top: 20px; padding: 16px; background: #f7fafc; border-left: 3px solid #5b5ef4; border-radius: 0 4px 4px 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap;">${escHtml(replyText)}</div>
+        ${replyText ? `<div style="margin-top: 20px; padding: 16px; background: #f7fafc; border-left: 3px solid #5b5ef4; border-radius: 0 4px 4px 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap;">${escHtml(replyText)}</div>` : ''}
+        ${imagesHtml}
+        ${filesHtml}
       </div>
     </div>
   `;
@@ -301,10 +329,8 @@ router.get('/:id', async (req, res) => {
 
     const ticket = ticketRows[0];
 
-    // Run messages and events queries in parallel — they're independent.
-    // Promise.all fires both immediately and resolves when both finish,
-    // roughly halving the round-trip compared to sequential awaits.
-    const [{ rows: msgRows }, { rows: eventRows }] = await Promise.all([
+    // Run messages, events, and message-linked attachments in parallel.
+    const [{ rows: msgRows }, { rows: eventRows }, { rows: attRows }] = await Promise.all([
       pool.query(
         'SELECT * FROM messages WHERE ticket_id = $1 ORDER BY created_at ASC',
         [ticket.id]
@@ -313,9 +339,25 @@ router.get('/:id', async (req, res) => {
         'SELECT * FROM ticket_events WHERE ticket_id = $1 ORDER BY created_at ASC',
         [ticket.id]
       ),
+      pool.query(
+        'SELECT id, message_id, filename, mime_type, size_bytes FROM ticket_attachments WHERE ticket_id = $1 AND message_id IS NOT NULL',
+        [ticket.id]
+      ),
     ]);
 
-    res.json(formatTicket(ticket, msgRows, eventRows));
+    // Group attachments by message_id so formatTicket can embed them inline.
+    const attachmentsByMsgId = {};
+    for (const a of attRows) {
+      if (!attachmentsByMsgId[a.message_id]) attachmentsByMsgId[a.message_id] = [];
+      attachmentsByMsgId[a.message_id].push({
+        id: a.id,
+        filename: a.filename,
+        mimeType: a.mime_type,
+        sizeBytes: a.size_bytes,
+      });
+    }
+
+    res.json(formatTicket(ticket, msgRows, eventRows, attachmentsByMsgId));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to fetch ticket' });
@@ -741,10 +783,13 @@ router.patch('/:id', async (req, res) => {
 
 // ── POST /api/tickets/:id/messages ───────────────────────────
 router.post('/:id/messages', async (req, res) => {
-  const { from, text, type, notify_customer } = req.body;
+  const { from, text, type, notify_customer, attachment_ids } = req.body;
 
-  if (!from?.trim() || !text?.trim()) {
-    return res.status(400).json({ error: 'from and text are required' });
+  // text is required unless there are attachments (files-only messages are valid)
+  const hasText = !!text?.trim();
+  const hasAttachments = Array.isArray(attachment_ids) && attachment_ids.length > 0;
+  if (!from?.trim() || (!hasText && !hasAttachments)) {
+    return res.status(400).json({ error: 'from and either text or attachment_ids are required' });
   }
 
   // Whitelist the two valid types. Default to 'message' if not provided
@@ -766,30 +811,89 @@ router.post('/:id/messages', async (req, res) => {
       `INSERT INTO messages (ticket_id, from_addr, body, type)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [ticketRow.id, from.trim(), text.trim(), msgType]
+      [ticketRow.id, from.trim(), (text || '').trim(), msgType]
     );
+
+    const msg = rows[0];
+
+    // ── Link uploaded attachments to this message ─────────────
+    let linkedAttachments = [];
+    if (hasAttachments) {
+      const { rows: attRows } = await pool.query(
+        `UPDATE ticket_attachments
+         SET message_id = $1
+         WHERE id = ANY($2::int[]) AND ticket_id = $3
+         RETURNING id, filename, mime_type, size_bytes, public_token, storage_key`,
+        [msg.id, attachment_ids, ticketRow.id]
+      );
+      linkedAttachments = attRows;
+    }
 
     // ── Fire-and-forget customer notification ─────────────────
     // Only for non-internal messages — internal notes never surface to customers.
     if (msgType === 'message' && notify_customer !== false && isEmailConfigured()) {
+      // Fetch file buffers from SeaweedFS so we can attach them directly to the
+      // email. Customers don't have access to the internal storage URL.
+      // Each attachment is fetched independently; a failed fetch is skipped so
+      // one broken file doesn't prevent the whole email from going out.
+      const emailAttachments = [];
+      const inlineImages     = [];
+      const fileAttachments  = [];
+
+      for (const a of linkedAttachments) {
+        try {
+          const buffer  = await getFileBuffer(a.storage_key);
+          const isImage = a.mime_type?.startsWith('image/');
+
+          if (isImage) {
+            const cid = `att-${a.id}@ticket`;
+            inlineImages.push({ filename: a.filename, cid });
+            emailAttachments.push({
+              filename:    a.filename,
+              content:     buffer,
+              contentType: a.mime_type,
+              cid,        // marks this as an inline image (referenced by cid: in HTML)
+            });
+          } else {
+            fileAttachments.push({ filename: a.filename });
+            emailAttachments.push({
+              filename:    a.filename,
+              content:     buffer,
+              contentType: a.mime_type || 'application/octet-stream',
+            });
+          }
+        } catch (fetchErr) {
+          console.error(`[tickets] Failed to fetch attachment ${a.id} for email:`, fetchErr.message);
+        }
+      }
+
       sendEmail({
-        to: ticketRow.customer_email,
-        subject: `[${ticketRow.ticket_ref}] New reply on your ticket: ${ticketRow.subject}`,
-        html: buildNewReplyHtml({
-          ticketRef:    ticketRow.ticket_ref,
-          subject:      ticketRow.subject,
-          customerName: ticketRow.customer_name,
-          replyText:    text.trim(),
+        to:          ticketRow.customer_email,
+        subject:     `[${ticketRow.ticket_ref}] New reply on your ticket: ${ticketRow.subject}`,
+        html:        buildNewReplyHtml({
+          ticketRef:       ticketRow.ticket_ref,
+          subject:         ticketRow.subject,
+          customerName:    ticketRow.customer_name,
+          replyText:       (text || '').trim(),
+          inlineImages,
+          fileAttachments,
         }),
+        attachments: emailAttachments,
       });
     }
 
-    const msg = rows[0];
     res.status(201).json({
+      id:   msg.id,
       from: msg.from_addr,
       text: msg.body,
       time: msg.created_at,
       type: msg.type,
+      attachments: linkedAttachments.map((a) => ({
+        id:        a.id,
+        filename:  a.filename,
+        mimeType:  a.mime_type,
+        sizeBytes: a.size_bytes,
+      })),
     });
   } catch (err) {
     console.error(err);

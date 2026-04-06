@@ -3827,7 +3827,8 @@ body {
 .hist-dot--assigned   { background: #27ae60; color: #27ae60; }   /* open-status green */
 .hist-dot--unassigned { background: #9aa3b5; color: #9aa3b5; }   /* muted gray */
 .hist-dot--resolution { background: #9b59b6; color: #9b59b6; }   /* purple — distinct from others */
-.hist-dot--board      { background: #10b981; color: #10b981; }   /* teal — matches scheduled/board tone */
+.hist-dot--board       { background: #10b981; color: #10b981; }   /* teal — matches scheduled/board tone */
+.hist-dot--attachment  { background: #f59e0b; color: #f59e0b; }   /* amber — distinct, easy to spot */
 
 /* Human-readable sentence */
 .hist-label {
@@ -6295,4 +6296,303 @@ body {
   .sc-body {
     padding: 1.125rem;
   }
+}
+
+/* ── Attachments tab ──────────────────────────────────────────── */
+.att-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  height: 100%;
+}
+
+.att-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.att-upload-btn {
+  padding: 0.4rem 0.875rem;
+  border-radius: var(--r-sm);
+  border: 1.5px solid var(--brand);
+  background: transparent;
+  color: var(--brand);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+
+.att-upload-btn:hover:not(:disabled) {
+  background: var(--brand);
+  color: #fff;
+}
+
+.att-upload-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.att-hint {
+  font-size: 0.75rem;
+  color: var(--gray-400);
+}
+
+.att-empty {
+  color: var(--gray-400);
+  font-size: 0.875rem;
+  padding: 1.5rem 0;
+  text-align: center;
+}
+
+.att-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+}
+
+.att-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--gray-100);
+  background: var(--gray-50);
+  transition: border-color var(--t-fast);
+}
+
+.att-item:hover {
+  border-color: var(--gray-200);
+}
+
+.att-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.att-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.att-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--brand);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.att-name:hover {
+  text-decoration: underline;
+}
+
+.att-detail {
+  font-size: 0.72rem;
+  color: var(--gray-400);
+}
+
+.att-delete-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--gray-300);
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.375rem;
+  border-radius: var(--r-xs);
+  transition: color var(--t-fast), background var(--t-fast);
+  line-height: 1;
+}
+
+.att-delete-btn:hover {
+  color: #e53e3e;
+  background: #fff5f5;
+}
+
+/* ── Message bubble: inline attachments ──────────────────────── */
+.msg-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 0;
+}
+.msg-attachments--below-text {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+
+.msg-att-image-link {
+  display: block;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  flex-shrink: 0;
+  line-height: 0;
+}
+.msg-att-image {
+  max-width: 220px;
+  max-height: 180px;
+  object-fit: cover;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(0,0,0,0.1);
+  display: block;
+  transition: opacity var(--t-fast);
+}
+.msg-att-image:hover { opacity: 0.9; }
+
+.msg-att-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: rgba(0,0,0,0.06);
+  border-radius: var(--r-md);
+  font-size: 12px;
+  font-weight: 500;
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--t-fast);
+  max-width: 220px;
+}
+.msg-att-file:hover { background: rgba(0,0,0,0.11); text-decoration: none; }
+.msg-att-file-icon { font-size: 13px; flex-shrink: 0; }
+.msg-att-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Communication tab: attachment composer ───────────────────── */
+.reply-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--gray-400);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast);
+}
+.reply-attach-btn:hover:not(:disabled) {
+  color: var(--brand);
+  border-color: var(--brand-border);
+  background: var(--brand-light);
+}
+.reply-attach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reply-attach-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: var(--r-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.reply-attach-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--gray-100);
+  background: var(--gray-50);
+}
+
+.reply-attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 200px;
+  padding: 4px 8px 4px 6px;
+  background: #fff;
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--r-md);
+  font-size: 11.5px;
+  color: var(--gray-700);
+  min-width: 0;
+}
+.reply-attach-chip--image {
+  padding: 4px 8px 4px 4px;
+}
+
+.reply-attach-thumb {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  border: 1px solid var(--gray-100);
+}
+
+.reply-attach-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.reply-attach-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reply-attach-remove {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--gray-400);
+  font-size: 10px;
+  cursor: pointer;
+  border-radius: var(--r-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--t-fast), background var(--t-fast);
+  line-height: 1;
+}
+.reply-attach-remove:hover:not(:disabled) {
+  color: #e53e3e;
+  background: #fff0f0;
+}
+.reply-attach-remove:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

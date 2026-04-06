@@ -118,7 +118,14 @@ function getSupportEmail() {
  * @param {string} opts.subject - Email subject line
  * @param {string} opts.html    - HTML body (plain text is generated automatically)
  */
-async function sendEmail({ to, subject, html }) {
+/**
+ * sendEmail({ to, subject, html, attachments? })
+ *
+ * Fire-and-forget. attachments is a nodemailer attachments array:
+ * [{ filename, content: Buffer, contentType, cid? }]
+ * cid is used for inline images referenced as <img src="cid:..."> in html.
+ */
+async function sendEmail({ to, subject, html, attachments }) {
   if (!isEmailConfigured()) return;
 
   try {
@@ -127,29 +134,25 @@ async function sendEmail({ to, subject, html }) {
       to,
       subject,
       html,
-      // nodemailer auto-generates a plain-text version from html when text
-      // is omitted, which satisfies the multipart/alternative requirement
-      // for inbox deliverability.
+      attachments,
     });
   } catch (err) {
-    // Log but never propagate — a mail failure should never break a ticket op.
     console.error(`[emailService] Failed to send "${subject}" to ${to}:`, err.message);
   }
 }
 
 /**
- * sendEmailDirect({ to, subject, html })
+ * sendEmailDirect({ to, subject, html, attachments? })
  *
- * Like sendEmail but THROWS on failure instead of swallowing the error.
- * Only use this when the caller explicitly needs to surface delivery errors
- * (e.g. the admin test-email endpoint). All other callers should use sendEmail.
+ * Like sendEmail but THROWS on failure.
  */
-async function sendEmailDirect({ to, subject, html }) {
+async function sendEmailDirect({ to, subject, html, attachments }) {
   await getTransporter().sendMail({
     from: _config.from,
     to,
     subject,
     html,
+    attachments,
   });
 }
 

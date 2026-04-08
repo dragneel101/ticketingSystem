@@ -167,7 +167,7 @@ router.post('/users', adminOnly, async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO users (email, name, password_hash, role)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, email, name, role`,
+       RETURNING id, email, name, role, created_at`,
       [email.trim().toLowerCase(), name.trim(), hash, assignedRole]
     );
     res.status(201).json(rows[0]);

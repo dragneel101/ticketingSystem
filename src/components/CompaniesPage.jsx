@@ -6,6 +6,10 @@ import { STATUS_LABELS } from '../utils/statusConfig';
 
 // ── Helpers ───────────────────────────────────────────────
 
+function getInitials(name) {
+  return name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
 function formatDate(iso) {
   return new Intl.DateTimeFormat(undefined, {
     year: 'numeric',
@@ -545,14 +549,23 @@ export default function CompaniesPage({ onSelectCompany, onSelectTicket }) {
                 {total > 0 ? `${total} company${total !== 1 ? 's' : ''}` : 'Track your client companies.'}
               </p>
             </div>
-            <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
-              + Add Company
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              {!loading && total > 0 && (
+                <div className="page-stat-chips">
+                  <span className="page-stat-chip page-stat-chip--brand">
+                    <span className="page-stat-chip-num">{total}</span> {total === 1 ? 'Company' : 'Companies'}
+                  </span>
+                </div>
+              )}
+              <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
+                + Add Company
+              </button>
+            </div>
           </div>
 
           <div className="cust-search-row">
             <div className="cust-search-wrap">
-              <svg className="cust-search-icon" width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <svg className="cust-search-icon" width="15" height="15" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                 <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.4" />
                 <path d="M8 8l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
@@ -646,7 +659,12 @@ function CompanyRow({ row, isAdmin, onSelectCompany, onEdit, onDelete, defaultPo
 
   return (
     <tr>
-      <td style={{ fontWeight: 600, color: 'var(--gray-800)' }}>{row.name}</td>
+      <td>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="item-avatar item-avatar--company" aria-hidden="true">{getInitials(row.name)}</span>
+          <span style={{ fontWeight: 600, color: 'var(--gray-800)' }}>{row.name}</span>
+        </div>
+      </td>
       <td style={{ color: 'var(--gray-500)', fontSize: '0.8125rem' }}>{addressDisplay}</td>
       <td style={{ color: 'var(--gray-600)' }}>{row.primary_contact || <span className="cust-empty">&mdash;</span>}</td>
       <td style={{ color: 'var(--gray-600)' }}>{row.phone || <span className="cust-empty">&mdash;</span>}</td>

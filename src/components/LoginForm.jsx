@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
-export default function LoginForm() {
+export default function LoginForm({ onBack }) {
   const { login } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -48,6 +48,24 @@ export default function LoginForm() {
 
         <h1 className="login-heading">Sign in to your account</h1>
         <p className="login-subheading">Enter your credentials to continue</p>
+
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: 13, color: 'var(--gray-500)', marginBottom: 8,
+              padding: '4px 0', fontFamily: 'inherit',
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M19 12H5M12 5l-7 7 7 7" />
+            </svg>
+            Back to home
+          </button>
+        )}
 
         <form className="login-form" onSubmit={handleSubmit} noValidate>
           <div className="form-group">

@@ -8,6 +8,7 @@ import TicketList from './components/TicketList';
 import TicketPage from './components/TicketPage';
 import NewTicketForm from './components/NewTicketForm';
 import LoginForm from './components/LoginForm';
+import LandingPage from './components/LandingPage';
 import UserManagementPage from './components/UserManagementPage';
 import AdminConfigPage from './components/AdminConfigPage';
 import DashboardPage from './components/DashboardPage';
@@ -67,6 +68,8 @@ function AppShell() {
   const [showNewTicket, setShowNewTicket] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCompany, setSelectedCompany] = useState(session.company);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
 
   // Keep sessionStorage in sync whenever navigation state changes.
   useEffect(() => {
@@ -82,6 +85,17 @@ function AppShell() {
     if (selectedCompany) sessionStorage.setItem('nav_selectedCompany', JSON.stringify(selectedCompany));
     else                 sessionStorage.removeItem('nav_selectedCompany');
   }, [selectedCompany]);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    function handleClickOutside(e) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [userMenuOpen]);
 
   async function handleLogout() {
     sessionStorage.removeItem('nav_view');
@@ -221,9 +235,29 @@ function AppShell() {
             )}
           </nav>
 
-          <div className="app-header-user">
-            <span className="app-header-name">{user?.name}</span>
-            <button className="app-header-logout" onClick={handleLogout}>Sign out</button>
+          <div className="app-header-user" ref={userMenuRef}>
+            <button
+              className={`app-header-user-trigger${userMenuOpen ? ' app-header-user-trigger--open' : ''}`}
+              onClick={() => setUserMenuOpen(v => !v)}
+              aria-haspopup="true"
+              aria-expanded={userMenuOpen}
+              aria-label="User menu"
+            >
+              <span className="app-header-avatar" aria-hidden="true">
+                {user?.name?.charAt(0).toUpperCase()}
+              </span>
+              <span className="app-header-name">{user?.name}</span>
+              <svg className="app-header-chevron" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            {userMenuOpen && (
+              <div className="app-header-user-menu" role="menu">
+                <button className="app-header-logout" onClick={handleLogout} role="menuitem">
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Mobile hamburger — only visible below the responsive breakpoint */}
@@ -364,6 +398,12 @@ function AppShell() {
 // user is unauthenticated.
 function AuthenticatedApp() {
   const { user, authLoading } = useAuth();
+  const [showLanding, setShowLanding] = useState(true);
+
+  // When the user logs out (user goes from truthy → null), reset to landing page.
+  useEffect(() => {
+    if (!user && !authLoading) setShowLanding(true);
+  }, [user, authLoading]);
 
   // Show nothing while we check the session — avoids a flash of login
   // form for users who already have a valid session cookie.
@@ -372,7 +412,10 @@ function AuthenticatedApp() {
   }
 
   if (!user) {
-    return <LoginForm />;
+    if (showLanding) {
+      return <LandingPage onSignIn={() => setShowLanding(false)} />;
+    }
+    return <LoginForm onBack={() => setShowLanding(true)} />;
   }
 
   return (

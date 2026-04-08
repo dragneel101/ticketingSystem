@@ -11,6 +11,14 @@ export default function CreateUserForm({ onClose, onCreated }) {
   const [minPasswordLength, setMinPasswordLength] = useState(null);
 
   useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
     async function loadPolicy() {
       try {
         const res = await fetch('/api/settings');
@@ -53,12 +61,8 @@ export default function CreateUserForm({ onClose, onCreated }) {
     }
   }
 
-  function handleBackdropClick(e) {
-    if (e.target === e.currentTarget) onClose();
-  }
-
   return (
-    <div className="modal-backdrop" onClick={handleBackdropClick} role="dialog" aria-modal="true" aria-label="Create user">
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Create user">
       <div className="modal-card">
         <div className="modal-header">
           <h2 className="modal-title">Create User</h2>

@@ -5,6 +5,10 @@ import { STATUS_LABELS } from '../utils/statusConfig';
 
 // ── Helpers ───────────────────────────────────────────────
 
+function getInitials(name) {
+  return name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
 function formatDate(iso) {
   return new Intl.DateTimeFormat(undefined, {
     year: 'numeric',
@@ -516,7 +520,12 @@ function CustomerRow({ customer, isAdmin, onUpdated, onDeleted, onSelectTicket }
   return (
     <>
       <tr>
-        <td className="cust-table-name">{customer.name}</td>
+        <td className="cust-table-name">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className="item-avatar" aria-hidden="true">{getInitials(customer.name)}</span>
+            <span>{customer.name}</span>
+          </div>
+        </td>
         <td className="cust-table-email">{customer.email}</td>
         <td className="cust-table-phone">{customer.phone || <span className="cust-empty">—</span>}</td>
         <td className="cust-table-company">{customer.company || <span className="cust-empty">—</span>}</td>
@@ -691,17 +700,24 @@ export default function CustomersPage({ onSelectTicket, initialSearch = '' }) {
                 {total > 0 ? `${total} customer${total !== 1 ? 's' : ''}` : 'Manage your customer contacts.'}
               </p>
             </div>
-            {/* Add Customer is available to all authenticated users —
-                agents may need to create a customer record before filing a ticket */}
-            <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
-              + Add Customer
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              {!loading && total > 0 && (
+                <div className="page-stat-chips">
+                  <span className="page-stat-chip page-stat-chip--brand">
+                    <span className="page-stat-chip-num">{total}</span> {total === 1 ? 'Contact' : 'Contacts'}
+                  </span>
+                </div>
+              )}
+              <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
+                + Add Customer
+              </button>
+            </div>
           </div>
 
           {/* Search bar — lives in the header so it's always visible */}
           <div className="cust-search-row">
             <div className="cust-search-wrap">
-              <svg className="cust-search-icon" width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <svg className="cust-search-icon" width="15" height="15" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                 <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.4" />
                 <path d="M8 8l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>

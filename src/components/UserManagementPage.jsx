@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import CreateUserForm from './CreateUserForm';
@@ -9,6 +9,10 @@ import ResetPasswordModal from './ResetPasswordModal';
 function RoleBadge({ role }) {
   const cls = role === 'admin' ? 'role-badge role-badge--admin' : 'role-badge role-badge--agent';
   return <span className={cls}>{role}</span>;
+}
+
+function getInitials(name) {
+  return name.split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
 // Format an ISO timestamp to a readable local date string.
@@ -64,7 +68,12 @@ function UserRow({ user, isSelf, onUpdated, onDeleted }) {
   return (
     <>
       <tr>
-        <td className="user-table-name">{user.name}</td>
+        <td className="user-table-name">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span className="item-avatar" aria-hidden="true">{getInitials(user.name)}</span>
+            <span>{user.name}</span>
+          </div>
+        </td>
         <td className="user-table-email">{user.email}</td>
         <td><RoleBadge role={user.role} /></td>
         <td className="user-table-date">{formatDate(user.created_at)}</td>
@@ -149,6 +158,25 @@ export default function UserManagementPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateUser, setShowCreateUser] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+
+  const filteredUsers = useMemo(() => {
+    let result = users;
+    if (searchInput.trim()) {
+      const q = searchInput.toLowerCase();
+      result = result.filter(u =>
+        u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+      );
+    }
+    if (roleFilter !== 'all') {
+      result = result.filter(u => u.role === roleFilter);
+    }
+    return result;
+  }, [users, searchInput, roleFilter]);
+
+  const adminCount = useMemo(() => users.filter(u => u.role === 'admin').length, [users]);
+  const agentCount = useMemo(() => users.filter(u => u.role === 'agent').length, [users]);
 
   // Fetch the full user list on mount. We do this inside the component
   // (not in a context) because user management is a narrow admin concern —
@@ -203,9 +231,51 @@ export default function UserManagementPage() {
               <h1 className="admin-page-title">User Management</h1>
               <p className="admin-page-subtitle">Create and manage agent and admin accounts.</p>
             </div>
-            <button className="btn btn-primary" onClick={() => setShowCreateUser(true)}>
-              + Add User
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              {!loading && (
+                <div className="page-stat-chips">
+                  <span className="page-stat-chip">
+                    <span className="page-stat-chip-num">{users.length}</span> Total
+                  </span>
+                  <span className="page-stat-chip page-stat-chip--brand">
+                    <span className="page-stat-chip-num">{adminCount}</span> Admin{adminCount !== 1 ? 's' : ''}
+                  </span>
+                  <span className="page-stat-chip">
+                    <span className="page-stat-chip-num">{agentCount}</span> Agent{agentCount !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              )}
+              <button className="btn btn-primary" onClick={() => setShowCreateUser(true)}>
+                + Add User
+              </button>
+            </div>
+          </div>
+
+          <div className="cust-search-row" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <div className="cust-search-wrap" style={{ maxWidth: 320, flex: '1 1 auto' }}>
+              <svg className="cust-search-icon" width="15" height="15" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M8 8l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+              <input
+                className="cust-search cust-search--icon"
+                type="search"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search by name or email…"
+                aria-label="Search users"
+              />
+            </div>
+            <select
+              className="usr-filter-select"
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              aria-label="Filter by role"
+            >
+              <option value="all">All roles</option>
+              <option value="admin">Admins only</option>
+              <option value="agent">Agents only</option>
+            </select>
           </div>
         </div>
       </div>
@@ -230,13 +300,15 @@ export default function UserManagementPage() {
                   <tr>
                     <td colSpan={5} className="user-table-empty">No users found.</td>
                   </tr>
+                ) : filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="user-table-empty">No users match your search.</td>
+                  </tr>
                 ) : (
-                  users.map((u) => (
+                  filteredUsers.map((u) => (
                     <UserRow
                       key={u.id}
                       user={u}
-                      // isSelf drives disabled state on Delete and the role field
-                      // in EditUserModal — prevents accidental self-lockout.
                       isSelf={currentUser?.id === u.id}
                       onUpdated={handleUserUpdated}
                       onDeleted={handleUserDeleted}
